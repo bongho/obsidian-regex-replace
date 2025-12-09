@@ -1,0 +1,10 @@
+{
+	"id": "regex-replace",
+	"name": "Regex Replace",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Find and replace text using regular expressions with real-time preview and match highlighting.",
+	"author": "bongho",
+	"authorUrl": "https://github.com/bongho",
+	"isDesktopOnly": false
+}
