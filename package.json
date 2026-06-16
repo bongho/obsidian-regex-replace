@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-regex-replace",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Find and replace text using regular expressions with preview support for Obsidian",
 	"main": "main.js",
 	"scripts": {
