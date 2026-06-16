@@ -142,6 +142,8 @@
 	padding: 1px 2px;
 	border-radius: 2px;
 	font-weight: 600;
+	/* Leave room when the preview auto-scrolls to this match (issue #1). */
+	scroll-margin: 1em 0;
 }
 
 .regex-replace-highlight-replacement {

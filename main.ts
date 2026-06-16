@@ -44,6 +44,32 @@ const DEFAULT_SETTINGS: RegexReplaceSettings = {
 	recentPatterns: []
 };
 
+// Number of characters rendered before the first match so it is not flush
+// against the top edge of the preview window.
+const CONTEXT_BEFORE = 200;
+
+// Computes the slice of text to render in the preview so the first match is
+// visible even when it occurs far past the start of a large document.
+// Returns positions in the coordinate space of the text it is given (input
+// space for "Before", output space for "After").
+function computePreviewWindow(
+	textLength: number,
+	firstMatchIndex: number,
+	maxLen: number,
+	contextBefore: number
+): { start: number; end: number } {
+	if (textLength <= maxLen) {
+		return { start: 0, end: textLength };
+	}
+	let start = Math.max(0, firstMatchIndex - contextBefore);
+	let end = start + maxLen;
+	if (end > textLength) {
+		end = textLength;
+		start = Math.max(0, end - maxLen);
+	}
+	return { start, end };
+}
+
 class RegexEngine {
 	static compile(pattern: string, flags: string): RegExp | null {
 		try {
@@ -384,7 +410,7 @@ class ReplaceModal extends Modal {
 		const originalDiv = this.previewEl.createDiv({ cls: 'regex-replace-preview-original' });
 		originalDiv.createEl('strong', { text: 'Before: ' });
 		const originalContent = originalDiv.createEl('div', { cls: 'regex-replace-highlight-content' });
-		this.renderHighlightedText(originalContent, text, result.matches, maxLen);
+		const firstMatchEl = this.renderHighlightedText(originalContent, text, result.matches, maxLen);
 
 		const replacedDiv = this.previewEl.createDiv({ cls: 'regex-replace-preview-replaced' });
 		replacedDiv.createEl('strong', { text: 'After: ' });
@@ -392,6 +418,13 @@ class ReplaceModal extends Modal {
 		this.renderReplacedText(replacedContent, text, result.matches, maxLen);
 
 		this.renderMatchList(result.matches);
+
+		// Scroll the preview to the first match so the change is visible even
+		// when it occurs far from the top of a large document (issue #1).
+		// Deferred a frame so the container has laid out before scrolling.
+		if (firstMatchEl) {
+			window.requestAnimationFrame(() => firstMatchEl.scrollIntoView({ block: 'center' }));
+		}
 	}
 
 	private renderHighlightedText(
@@ -399,33 +432,53 @@ class ReplaceModal extends Modal {
 		text: string,
 		matches: MatchInfo[],
 		maxLen: number
-	): void {
-		let lastIndex = 0;
-		const truncatedText = text.substring(0, maxLen);
+	): HTMLElement | null {
+		const firstIdx = matches.length ? matches[0].index : 0;
+		const { start: winStart, end: winEnd } = computePreviewWindow(
+			text.length,
+			firstIdx,
+			maxLen,
+			CONTEXT_BEFORE
+		);
 
-		for (const match of matches) {
-			if (match.index >= maxLen) break;
-
-			if (match.index > lastIndex) {
-				container.createSpan({ text: truncatedText.substring(lastIndex, match.index) });
-			}
-
-			const matchEnd = Math.min(match.index + match.length, maxLen);
-			container.createSpan({
-				text: truncatedText.substring(match.index, matchEnd),
-				cls: 'regex-replace-highlight-match'
-			});
-
-			lastIndex = match.index + match.length;
-		}
-
-		if (lastIndex < truncatedText.length) {
-			container.createSpan({ text: truncatedText.substring(lastIndex) });
-		}
-
-		if (text.length > maxLen) {
+		if (winStart > 0) {
 			container.createSpan({ text: '...', cls: 'regex-replace-truncated' });
 		}
+
+		let firstMatchEl: HTMLElement | null = null;
+		let cursor = winStart;
+
+		for (const match of matches) {
+			const mStart = match.index;
+			const mEnd = match.index + match.length;
+			if (mEnd <= winStart) continue;
+			if (mStart >= winEnd) break;
+
+			const clipStart = Math.max(mStart, winStart);
+			const clipEnd = Math.min(mEnd, winEnd);
+
+			if (clipStart > cursor) {
+				container.createSpan({ text: text.substring(cursor, clipStart) });
+			}
+
+			const el = container.createSpan({
+				text: text.substring(clipStart, clipEnd),
+				cls: 'regex-replace-highlight-match'
+			});
+			if (!firstMatchEl) firstMatchEl = el;
+
+			cursor = clipEnd;
+		}
+
+		if (cursor < winEnd) {
+			container.createSpan({ text: text.substring(cursor, winEnd) });
+		}
+
+		if (winEnd < text.length) {
+			container.createSpan({ text: '...', cls: 'regex-replace-truncated' });
+		}
+
+		return firstMatchEl;
 	}
 
 	private renderReplacedText(
@@ -435,24 +488,48 @@ class ReplaceModal extends Modal {
 		maxLen: number
 	): void {
 		const segments = this.buildReplacementSegments(text, matches);
-		let currentLength = 0;
 
-		for (const segment of segments) {
-			if (currentLength >= maxLen) break;
+		// Assign each segment an output-space range and find where the first
+		// replacement begins, so the window anchors on the actual change.
+		let acc = 0;
+		let firstReplOutStart = 0;
+		let foundFirstRepl = false;
+		const ranges = segments.map(segment => {
+			const range = { start: acc, end: acc + segment.text.length, segment };
+			if (segment.isReplacement && !foundFirstRepl) {
+				firstReplOutStart = acc;
+				foundFirstRepl = true;
+			}
+			acc += segment.text.length;
+			return range;
+		});
+		const totalOut = acc;
 
-			const remainingLen = maxLen - currentLength;
-			const displayText = segment.text.substring(0, remainingLen);
+		const { start: winStart, end: winEnd } = computePreviewWindow(
+			totalOut,
+			firstReplOutStart,
+			maxLen,
+			CONTEXT_BEFORE
+		);
 
-			container.createSpan({
-				text: displayText,
-				cls: segment.isReplacement ? 'regex-replace-highlight-replacement' : undefined
-			});
-
-			currentLength += displayText.length;
+		if (winStart > 0) {
+			container.createSpan({ text: '...', cls: 'regex-replace-truncated' });
 		}
 
-		const fullLength = segments.reduce((sum, s) => sum + s.text.length, 0);
-		if (fullLength > maxLen) {
+		for (const { start: sStart, end: sEnd, segment } of ranges) {
+			if (sEnd <= winStart) continue;
+			if (sStart >= winEnd) break;
+
+			const clipFrom = Math.max(sStart, winStart) - sStart;
+			const clipTo = Math.min(sEnd, winEnd) - sStart;
+
+			container.createSpan({
+				text: segment.text.substring(clipFrom, clipTo),
+				cls: segment.isReplacement ? 'regex-replace-highlight-replacement' : undefined
+			});
+		}
+
+		if (winEnd < totalOut) {
 			container.createSpan({ text: '...', cls: 'regex-replace-truncated' });
 		}
 	}
