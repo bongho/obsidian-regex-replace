@@ -83,6 +83,25 @@ class RegexEngine {
 	}
 }
 
+// computePreviewWindow (copied from main.ts for testing)
+function computePreviewWindow(
+	textLength: number,
+	firstMatchIndex: number,
+	maxLen: number,
+	contextBefore: number
+): { start: number; end: number } {
+	if (textLength <= maxLen) {
+		return { start: 0, end: textLength };
+	}
+	let start = Math.max(0, firstMatchIndex - contextBefore);
+	let end = start + maxLen;
+	if (end > textLength) {
+		end = textLength;
+		start = Math.max(0, end - maxLen);
+	}
+	return { start, end };
+}
+
 // ============================================================================
 // Test Framework
 // ============================================================================
@@ -307,6 +326,32 @@ test('Convert bullet points to numbered list', () => {
 	// Note: This tests the basic pattern; actual numbering would need state
 	const result = RegexEngine.execute('- item1\n- item2\n- item3', '^- ', '1. ', 'gm');
 	assertEqual(result, '1. item1\n1. item2\n1. item3');
+});
+
+console.log('\n--- Preview Window ---');
+
+test('Small doc: no windowing', () => {
+	assertEqual(computePreviewWindow(500, 10, 1000, 200), { start: 0, end: 500 });
+});
+
+test('Match at index 0 in large doc', () => {
+	assertEqual(computePreviewWindow(5000, 0, 1000, 200), { start: 0, end: 1000 });
+});
+
+test('Far match: window centered before match', () => {
+	assertEqual(computePreviewWindow(5000, 3000, 1000, 200), { start: 2800, end: 3800 });
+});
+
+test('Match near EOF: tail-clamp and left-shift', () => {
+	assertEqual(computePreviewWindow(5000, 4950, 1000, 200), { start: 4000, end: 5000 });
+});
+
+test('First match within context: window starts at 0', () => {
+	assertEqual(computePreviewWindow(5000, 100, 1000, 200), { start: 0, end: 1000 });
+});
+
+test('Boundary: textLength equals maxLen', () => {
+	assertEqual(computePreviewWindow(1000, 900, 1000, 200), { start: 0, end: 1000 });
 });
 
 // ============================================================================
