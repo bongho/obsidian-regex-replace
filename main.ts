@@ -421,9 +421,11 @@ class ReplaceModal extends Modal {
 
 		// Scroll the preview to the first match so the change is visible even
 		// when it occurs far from the top of a large document (issue #1).
-		// Deferred a frame so the container has laid out before scrolling.
+		// 'nearest' only scrolls when the match is off-screen, so it stays calm
+		// while typing (the preview re-renders on every keystroke). Deferred a
+		// frame so the container has laid out before scrolling.
 		if (firstMatchEl) {
-			window.requestAnimationFrame(() => firstMatchEl.scrollIntoView({ block: 'center' }));
+			window.requestAnimationFrame(() => firstMatchEl.scrollIntoView({ block: 'nearest' }));
 		}
 	}
 
