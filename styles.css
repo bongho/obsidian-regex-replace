@@ -205,6 +205,32 @@
 	font-style: italic;
 }
 
+/* Pipeline Rulesets */
+.regex-replace-ruleset-textarea {
+	width: 100%;
+	margin-bottom: 16px;
+	padding: 8px;
+	font-family: var(--font-monospace);
+	font-size: 13px;
+	resize: vertical;
+}
+
+.regex-replace-pipeline-steps {
+	margin: 0 0 8px 0;
+	padding-left: 20px;
+	font-size: 13px;
+}
+
+.regex-replace-pipeline-step {
+	margin-bottom: 4px;
+}
+
+.regex-replace-pipeline-step code {
+	background: rgba(255, 235, 59, 0.3);
+	padding: 1px 4px;
+	border-radius: 2px;
+}
+
 /* Improved Preview Layout */
 .regex-replace-preview {
 	max-height: 300px;

@@ -13,6 +13,7 @@ A powerful find and replace plugin for [Obsidian](https://obsidian.md) that supp
 - **Regex Flags**: Toggle global (`g`), case-insensitive (`i`), and multiline (`m`) flags
 - **Selection Mode**: Replace only within selected text
 - **Pattern History**: Save and reuse recent search patterns
+- **Pipeline Rulesets**: Save reusable multi-step rulesets and apply them in sequence, with a step-by-step preview — and import existing [regex-pipeline](https://github.com/No3371/obsidian-regex-pipeline) rulesets
 - **Dark/Light Theme**: Optimized for both Obsidian themes
 
 ## Installation
@@ -92,6 +93,38 @@ Input:   test@example.com
 Output:  User: test, Domain: example
 ```
 
+## Pipeline Rulesets
+
+A ruleset is a named list of find/replace rules applied **in sequence** — each rule
+operates on the previous rule's output. Useful for repeatable, multi-step cleanups
+(e.g. normalize headers, then collapse whitespace, then fix links).
+
+### Defining a ruleset
+
+In Settings → Regex Replace → **Pipeline rulesets**, click **Add ruleset**, name it,
+and write rules using [regex-pipeline](https://github.com/No3371/obsidian-regex-pipeline)
+syntax (one rule per block):
+
+```
+"SEARCH"->"REPLACE"
+"\s+"->" "
+"##\s"gm->"### "
+```
+
+- Inline flags follow the search quote (e.g. `"foo"gi->"bar"`); without them, `gm` is used.
+- Replacements may span multiple lines.
+
+### Applying a ruleset
+
+- **Command Palette**: "Apply ruleset (pipeline)" → pick a ruleset → review the
+  step-by-step preview (match count per rule) → **Apply pipeline**.
+- A rule with an invalid regex is skipped and reported, never aborting the whole run.
+
+### Importing from regex-pipeline
+
+Click **Import from regex-pipeline** to read every ruleset file in
+`<vault>/.obsidian/regex-rulesets/` and convert it into a native ruleset.
+
 ## Settings
 
 Access via Settings → Regex Replace:
@@ -101,6 +134,7 @@ Access via Settings → Regex Replace:
 | Default Flags | Pre-selected regex flags | `g` |
 | Show Preview | Display before/after preview | `true` |
 | History Limit | Max saved patterns | `10` |
+| Pipeline rulesets | Add/edit/delete/import reusable rulesets | — |
 
 ## Development
 
@@ -118,10 +152,15 @@ npm run dev
 npm run build
 
 # Run tests
-node test.js
+npx ts-node --transpile-only test.ts
 ```
 
 ## Changelog
+
+### 1.1.0
+- Pipeline rulesets: save reusable multi-step rulesets, apply in sequence with step preview
+- Import rulesets from the regex-pipeline plugin
+- New command: "Apply ruleset (pipeline)"
 
 ### 1.0.0
 - Initial release

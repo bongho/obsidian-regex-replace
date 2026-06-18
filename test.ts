@@ -1,6 +1,8 @@
 /**
  * Regex Replace Plugin - Unit Tests
- * Run with: npx ts-node test.ts
+ * Run with: npx ts-node --transpile-only test.ts
+ * (--transpile-only skips the isolatedModules check; type safety is enforced
+ *  by `npm run build`'s `tsc -noEmit`.)
  */
 
 // ============================================================================
@@ -19,6 +21,12 @@ interface ReplaceResult {
 	replaced: string;
 	matchCount: number;
 	matches: MatchInfo[];
+}
+
+interface PipelineRule {
+	search: string;
+	replace: string;
+	flags: string;
 }
 
 class RegexEngine {
@@ -81,6 +89,33 @@ class RegexEngine {
 			return { error: String(e) };
 		}
 	}
+
+	// Mirrors main.ts RegexEngine.executePipeline (copied for testing).
+	static executePipeline(text: string, rules: PipelineRule[]): { result: string; warnings: string[] } {
+		let current = text;
+		const warnings: string[] = [];
+		rules.forEach((rule, i) => {
+			const out = this.execute(current, rule.search, rule.replace, rule.flags || 'g');
+			if (typeof out === 'object' && 'error' in out) {
+				warnings.push(`Rule ${i + 1} ("${rule.search}"): ${out.error}`);
+				return;
+			}
+			current = out;
+		});
+		return { result: current, warnings };
+	}
+}
+
+// Mirrors main.ts parsePipelineRuleset (copied for testing).
+const PIPELINE_DEFAULT_FLAGS = 'gm';
+function parsePipelineRuleset(content: string): PipelineRule[] {
+	const rules: PipelineRule[] = [];
+	const ruleRe = /"([^"]*?)"([a-zA-Z]*)\s*->\s*"([^"]*?)"/gs;
+	let m: RegExpExecArray | null;
+	while ((m = ruleRe.exec(content)) !== null) {
+		rules.push({ search: m[1], replace: m[3], flags: m[2] || PIPELINE_DEFAULT_FLAGS });
+	}
+	return rules;
 }
 
 // computePreviewWindow (copied from main.ts for testing)
@@ -352,6 +387,71 @@ test('First match within context: window starts at 0', () => {
 
 test('Boundary: textLength equals maxLen', () => {
 	assertEqual(computePreviewWindow(1000, 900, 1000, 200), { start: 0, end: 1000 });
+});
+
+// --- Pipeline Execution ---
+console.log('\n--- Pipeline Execution ---');
+
+test('Pipeline applies rules in sequence', () => {
+	const rules: PipelineRule[] = [
+		{ search: 'cat', replace: 'dog', flags: 'g' },
+		{ search: 'dog', replace: 'fox', flags: 'g' }
+	];
+	const { result } = RegexEngine.executePipeline('cat cat', rules);
+	assertEqual(result, 'fox fox');  // cat->dog->fox, order matters
+});
+
+test('Pipeline cumulative transform', () => {
+	const rules: PipelineRule[] = [
+		{ search: '##\\s', replace: '### ', flags: 'gm' },
+		{ search: '\\s+', replace: ' ', flags: 'g' }
+	];
+	const { result } = RegexEngine.executePipeline('##  Header', rules);
+	assertEqual(result, '### Header');
+});
+
+test('Pipeline skips bad rule and reports warning', () => {
+	const rules: PipelineRule[] = [
+		{ search: '[invalid', replace: 'x', flags: 'g' },
+		{ search: 'foo', replace: 'bar', flags: 'g' }
+	];
+	const { result, warnings } = RegexEngine.executePipeline('foo', rules);
+	assertEqual(result, 'bar');
+	assertEqual(warnings.length, 1);
+});
+
+// --- Pipeline Ruleset Parsing ---
+console.log('\n--- Pipeline Ruleset Parsing ---');
+
+test('Parse single rule', () => {
+	const rules = parsePipelineRuleset('"foo"->"bar"');
+	assertEqual(rules, [{ search: 'foo', replace: 'bar', flags: 'gm' }]);
+});
+
+test('Parse multiple rules in one file', () => {
+	const rules = parsePipelineRuleset('"foo"->"bar"\n"\\s+"->" "');
+	assertEqual(rules.length, 2);
+	assertEqual(rules[1], { search: '\\s+', replace: ' ', flags: 'gm' });
+});
+
+test('Parse inline flags override default', () => {
+	const rules = parsePipelineRuleset('"foo"gi->"bar"');
+	assertEqual(rules[0].flags, 'gi');
+});
+
+test('Parse newline variations around arrow', () => {
+	const rules = parsePipelineRuleset('"foo"\n->\n"bar"');
+	assertEqual(rules, [{ search: 'foo', replace: 'bar', flags: 'gm' }]);
+});
+
+test('Parse multi-line replacement', () => {
+	const rules = parsePipelineRuleset('"foo"->"line1\nline2"');
+	assertEqual(rules[0].replace, 'line1\nline2');
+});
+
+test('Parse skips blank lines between rules', () => {
+	const rules = parsePipelineRuleset('"a"->"b"\n\n\n"c"->"d"');
+	assertEqual(rules.length, 2);
 });
 
 // ============================================================================

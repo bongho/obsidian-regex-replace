@@ -14,6 +14,7 @@ interface RegexReplaceSettings {
 	historyLimit: number;
 	showPreview: boolean;
 	recentPatterns: PatternHistory[];
+	ruleSets: RuleSet[];
 }
 
 interface PatternHistory {
@@ -21,6 +22,31 @@ interface PatternHistory {
 	replace: string;
 	flags: string;
 	timestamp: number;
+}
+
+// A single find/replace step inside a pipeline ruleset.
+interface PipelineRule {
+	search: string;
+	replace: string;
+	flags: string;
+}
+
+// A named, reusable pipeline of rules applied in sequence. `source` is the
+// regex-pipeline-syntax text the user edits (SSOT); `rules` is its parsed form.
+interface RuleSet {
+	name: string;
+	source: string;
+	rules: PipelineRule[];
+}
+
+// One stage of a pipeline preview: the text before/after this rule ran.
+interface PipelineStep {
+	stepIndex: number;
+	search: string;
+	matchCount: number;
+	before: string;
+	after: string;
+	error?: string;
 }
 
 interface ReplaceResult {
@@ -41,8 +67,31 @@ const DEFAULT_SETTINGS: RegexReplaceSettings = {
 	defaultFlags: 'g',
 	historyLimit: 10,
 	showPreview: true,
-	recentPatterns: []
+	recentPatterns: [],
+	ruleSets: []
 };
+
+// Default flags applied to an imported regex-pipeline rule when it specifies
+// none. regex-pipeline appends `gm` by default, so imports stay faithful.
+const PIPELINE_DEFAULT_FLAGS = 'gm';
+
+// Parses regex-pipeline ruleset syntax (`"SEARCH"flags->"REPLACE"`, one or more
+// rules, newlines allowed around the arrow) into PipelineRule[]. Quotes inside
+// a pattern are not supported (matching regex-pipeline's own limitation), and
+// malformed fragments are simply skipped by the matcher.
+function parsePipelineRuleset(content: string): PipelineRule[] {
+	const rules: PipelineRule[] = [];
+	const ruleRe = /"([^"]*?)"([a-zA-Z]*)\s*->\s*"([^"]*?)"/gs;
+	let m: RegExpExecArray | null;
+	while ((m = ruleRe.exec(content)) !== null) {
+		rules.push({
+			search: m[1],
+			replace: m[3],
+			flags: m[2] || PIPELINE_DEFAULT_FLAGS
+		});
+	}
+	return rules;
+}
 
 // Number of characters rendered before the first match so it is not flush
 // against the top edge of the preview window.
@@ -164,6 +213,60 @@ class RegexEngine {
 		} catch (e) {
 			return { error: String(e) };
 		}
+	}
+
+	// Applies rules in sequence, each operating on the previous rule's output.
+	// A rule whose regex fails to compile/run is skipped and reported, so one
+	// bad rule never aborts the whole pipeline.
+	static executePipeline(
+		text: string,
+		rules: PipelineRule[]
+	): { result: string; warnings: string[] } {
+		let current = text;
+		const warnings: string[] = [];
+
+		rules.forEach((rule, i) => {
+			const out = this.execute(current, rule.search, rule.replace, rule.flags || 'g');
+			if (typeof out === 'object' && 'error' in out) {
+				warnings.push(`Rule ${i + 1} ("${rule.search}"): ${out.error}`);
+				return;
+			}
+			current = out;
+		});
+
+		return { result: current, warnings };
+	}
+
+	// Builds a step-by-step preview of the pipeline so each rule's cumulative
+	// effect (and match count) is visible before applying.
+	static previewPipeline(text: string, rules: PipelineRule[]): PipelineStep[] {
+		const steps: PipelineStep[] = [];
+		let current = text;
+
+		rules.forEach((rule, i) => {
+			const pv = this.preview(current, rule.search, rule.replace, rule.flags || 'g');
+			if ('error' in pv) {
+				steps.push({
+					stepIndex: i,
+					search: rule.search,
+					matchCount: 0,
+					before: current,
+					after: current,
+					error: pv.error
+				});
+				return;
+			}
+			steps.push({
+				stepIndex: i,
+				search: rule.search,
+				matchCount: pv.matchCount,
+				before: current,
+				after: pv.replaced
+			});
+			current = pv.replaced;
+		});
+
+		return steps;
 	}
 }
 
@@ -647,6 +750,146 @@ class ReplaceModal extends Modal {
 	}
 }
 
+class PipelineModal extends Modal {
+	private plugin: RegexReplacePlugin;
+	private editor: Editor;
+	private selected: RuleSet | null = null;
+	private selectionOnly = false;
+	private previewEl: HTMLElement;
+
+	constructor(app: App, plugin: RegexReplacePlugin, editor: Editor) {
+		super(app);
+		this.plugin = plugin;
+		this.editor = editor;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.addClass('regex-replace-modal');
+		contentEl.createEl('h2', { text: 'Apply ruleset (pipeline)' });
+
+		const ruleSets = this.plugin.settings.ruleSets;
+		if (ruleSets.length === 0) {
+			contentEl.createEl('p', {
+				text: 'No rulesets defined. Add one in the plugin settings, or import from regex-pipeline.'
+			});
+			const close = contentEl.createEl('button', { text: 'Close' });
+			close.addEventListener('click', () => this.close());
+			return;
+		}
+
+		this.createRuleSetSelector(contentEl, ruleSets);
+		this.createSelectionOption(contentEl);
+		const previewContainer = contentEl.createDiv({ cls: 'regex-replace-preview-container' });
+		previewContainer.createEl('label', { text: 'Pipeline preview' });
+		this.previewEl = previewContainer.createDiv({ cls: 'regex-replace-preview' });
+		this.createButtons(contentEl);
+
+		this.selected = ruleSets[0];
+		this.updatePreview();
+	}
+
+	private createRuleSetSelector(container: HTMLElement, ruleSets: RuleSet[]): void {
+		const wrapper = container.createDiv({ cls: 'regex-replace-history' });
+		wrapper.createEl('label', { text: 'Ruleset' });
+		const select = wrapper.createEl('select', { cls: 'regex-replace-history-select' });
+		ruleSets.forEach((rs, index) => {
+			select.createEl('option', {
+				text: `${rs.name} (${rs.rules.length} rule${rs.rules.length === 1 ? '' : 's'})`,
+				value: String(index)
+			});
+		});
+		select.addEventListener('change', (e) => {
+			const index = parseInt((e.target as HTMLSelectElement).value);
+			this.selected = ruleSets[index] ?? null;
+			this.updatePreview();
+		});
+	}
+
+	private createSelectionOption(container: HTMLElement): void {
+		const field = container.createDiv({ cls: 'regex-replace-field' });
+		const label = field.createEl('label', { cls: 'regex-replace-flag-label' });
+		const checkbox = label.createEl('input', { type: 'checkbox' });
+		label.appendText(' Apply to selection only');
+		checkbox.addEventListener('change', (e) => {
+			this.selectionOnly = (e.target as HTMLInputElement).checked;
+			this.updatePreview();
+		});
+	}
+
+	private getText(): string {
+		if (this.selectionOnly) {
+			return this.editor.getSelection() || this.editor.getValue();
+		}
+		return this.editor.getValue();
+	}
+
+	private updatePreview(): void {
+		this.previewEl.empty();
+		if (!this.selected || this.selected.rules.length === 0) {
+			this.previewEl.setText('This ruleset has no rules.');
+			return;
+		}
+
+		const steps = RegexEngine.previewPipeline(this.getText(), this.selected.rules);
+		const list = this.previewEl.createEl('ol', { cls: 'regex-replace-pipeline-steps' });
+		for (const step of steps) {
+			const li = list.createEl('li', { cls: 'regex-replace-pipeline-step' });
+			li.createEl('code', { text: step.search });
+			if (step.error) {
+				li.createSpan({ text: ` — error: ${step.error}`, cls: 'regex-replace-error' });
+			} else {
+				li.createSpan({ text: ` — ${step.matchCount} match(es)` });
+			}
+		}
+
+		const final = steps.length ? steps[steps.length - 1].after : this.getText();
+		const finalDiv = this.previewEl.createDiv({ cls: 'regex-replace-preview-replaced' });
+		finalDiv.createEl('strong', { text: 'Result: ' });
+		finalDiv.createEl('div', {
+			text: final.length > 1000 ? final.substring(0, 1000) + '...' : final,
+			cls: 'regex-replace-highlight-content'
+		});
+	}
+
+	private createButtons(container: HTMLElement): void {
+		const buttonContainer = container.createDiv({ cls: 'regex-replace-buttons' });
+		const apply = buttonContainer.createEl('button', { text: 'Apply pipeline', cls: 'mod-cta' });
+		apply.addEventListener('click', () => this.applyPipeline());
+		const cancel = buttonContainer.createEl('button', { text: 'Cancel' });
+		cancel.addEventListener('click', () => this.close());
+	}
+
+	private applyPipeline(): void {
+		if (!this.selected || this.selected.rules.length === 0) {
+			new Notice('Select a ruleset with at least one rule');
+			return;
+		}
+
+		const text = this.getText();
+		const { result, warnings } = RegexEngine.executePipeline(text, this.selected.rules);
+
+		if (this.selectionOnly && this.editor.getSelection()) {
+			this.editor.replaceSelection(result);
+		} else {
+			const cursor = this.editor.getCursor();
+			this.editor.setValue(result);
+			this.editor.setCursor(cursor);
+		}
+
+		if (warnings.length > 0) {
+			new Notice(`Applied "${this.selected.name}" with ${warnings.length} skipped rule(s):\n${warnings.join('\n')}`);
+		} else {
+			new Notice(`Applied ruleset "${this.selected.name}" (${this.selected.rules.length} rules)`);
+		}
+		this.close();
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
+	}
+}
+
 class RegexReplaceSettingTab extends PluginSettingTab {
 	plugin: RegexReplacePlugin;
 
@@ -704,6 +947,99 @@ class RegexReplaceSettingTab extends PluginSettingTab {
 					void this.plugin.saveSettings();
 					new Notice('History cleared');
 				}));
+
+		this.displayRuleSets(containerEl);
+	}
+
+	private displayRuleSets(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: 'Pipeline rulesets' });
+		containerEl.createEl('p', {
+			text: 'Each ruleset is a list of rules applied in sequence. Use regex-pipeline syntax: "SEARCH"->"REPLACE" (optional inline flags, e.g. "SEARCH"gi->"REPLACE"), one rule per block.',
+			cls: 'setting-item-description'
+		});
+
+		const ruleSets = this.plugin.settings.ruleSets;
+
+		ruleSets.forEach((rs, index) => {
+			const setting = new Setting(containerEl)
+				.addText(text => text
+					.setPlaceholder('Ruleset name')
+					.setValue(rs.name)
+					.onChange(async (value) => {
+						rs.name = value;
+						await this.plugin.saveSettings();
+					}))
+				.addButton(button => button
+					.setButtonText('Delete')
+					.setWarning()
+					.onClick(async () => {
+						ruleSets.splice(index, 1);
+						await this.plugin.saveSettings();
+						this.display();
+					}));
+			setting.infoEl.remove();
+
+			const area = containerEl.createEl('textarea', {
+				cls: 'regex-replace-ruleset-textarea'
+			});
+			area.value = rs.source;
+			area.rows = 5;
+			area.placeholder = '"foo"->"bar"\n"\\s+"->" "';
+			area.addEventListener('change', async () => {
+				rs.source = area.value;
+				rs.rules = parsePipelineRuleset(area.value);
+				await this.plugin.saveSettings();
+				new Notice(`Ruleset "${rs.name}": ${rs.rules.length} rule(s) parsed`);
+			});
+		});
+
+		new Setting(containerEl)
+			.addButton(button => button
+				.setButtonText('Add ruleset')
+				.setCta()
+				.onClick(async () => {
+					ruleSets.push({ name: `Ruleset ${ruleSets.length + 1}`, source: '', rules: [] });
+					await this.plugin.saveSettings();
+					this.display();
+				}))
+			.addButton(button => button
+				.setButtonText('Import from regex-pipeline')
+				.onClick(() => { void this.importFromRegexPipeline(); }));
+	}
+
+	// Reads regex-pipeline ruleset files from `<configDir>/regex-rulesets/`,
+	// converts each into a native RuleSet, and appends them. index.txt is skipped.
+	private async importFromRegexPipeline(): Promise<void> {
+		const adapter = this.app.vault.adapter;
+		const dir = `${this.app.vault.configDir}/regex-rulesets`;
+
+		if (!(await adapter.exists(dir))) {
+			new Notice(`No regex-pipeline folder found at ${dir}`);
+			return;
+		}
+
+		const listing = await adapter.list(dir);
+		const ruleFiles = listing.files.filter(
+			f => f.endsWith('.txt') && !f.endsWith('/index.txt')
+		);
+
+		let imported = 0;
+		for (const file of ruleFiles) {
+			try {
+				const content = await adapter.read(file);
+				const rules = parsePipelineRuleset(content);
+				if (rules.length === 0) continue;
+				const name = (file.split('/').pop() ?? file).replace(/\.txt$/, '');
+				this.plugin.settings.ruleSets.push({ name, source: content, rules });
+				imported++;
+			} catch (e) {
+				new Notice(`Failed to read ${file}: ${e}`);
+			}
+		}
+
+		await this.plugin.saveSettings();
+		new Notice(`Imported ${imported} ruleset(s) from regex-pipeline`);
+		this.display();
 	}
 }
 
@@ -726,6 +1062,14 @@ export default class RegexReplacePlugin extends Plugin {
 			name: 'Replace in selection',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				new ReplaceModal(this.app, this, editor).open();
+			}
+		});
+
+		this.addCommand({
+			id: 'apply-ruleset',
+			name: 'Apply ruleset (pipeline)',
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				new PipelineModal(this.app, this, editor).open();
 			}
 		});
 
