@@ -86,15 +86,17 @@ export class RegexEngine {
 		const matchInfos: MatchInfo[] = [];
 		const globalFlags = flags.includes('g') ? flags : flags + 'g';
 		const globalRegex = new RegExp(pattern, globalFlags);
-		const nonGlobalFlags = flags.replace('g', '');
 		let match;
 
 		while ((match = globalRegex.exec(text)) !== null) {
 			const matchedText = match[0];
-			const replacementText = matchedText.replace(
-				new RegExp(pattern, nonGlobalFlags),
-				replacement
-			);
+			// Compute replacement by substituting group references directly from
+			// the exec result, rather than re-running the regex on the matched
+			// substring. Re-running loses surrounding context, so lookbehind /
+			// lookahead assertions match at wrong positions and produce a
+			// misleading preview (the actual replacement via text.replace() is
+			// unaffected and always correct).
+			const replacementText = this.substituteGroups(matchedText, match, replacement);
 
 			matchInfos.push({
 				index: match.index,
@@ -109,6 +111,19 @@ export class RegexEngine {
 		}
 
 		return matchInfos;
+	}
+
+	private static substituteGroups(
+		matchedText: string,
+		match: RegExpExecArray,
+		replacement: string
+	): string {
+		return replacement
+			.replace(/\$\$/g, '\x00')
+			.replace(/\$&/g, matchedText)
+			.replace(/\$(\d+)/g, (_, n) => match[parseInt(n)] ?? '')
+			.replace(/\$<([^>]+)>/g, (_, name) => match.groups?.[name] ?? '')
+			.replace(/\x00/g, '$');
 	}
 
 	static execute(
