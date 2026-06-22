@@ -64,11 +64,10 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
 	}
 
 	private displayRuleSets(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: 'Pipeline rulesets' });
-		containerEl.createEl('p', {
-			text: 'Each ruleset is a list of rules applied in sequence. Use regex-pipeline syntax: "SEARCH"->"REPLACE" (optional inline flags, e.g. "SEARCH"gi->"REPLACE"), one rule per block.',
-			cls: 'setting-item-description'
-		});
+		new Setting(containerEl)
+			.setName('Pipeline rulesets')
+			.setDesc('Each ruleset is a list of rules applied in sequence. Use regex-pipeline syntax: "SEARCH"->"REPLACE" (optional inline flags, e.g. "SEARCH"gi->"REPLACE"), one rule per block.')
+			.setHeading();
 
 		const ruleSets = this.plugin.settings.ruleSets;
 
@@ -97,11 +96,12 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
 			area.value = rs.source;
 			area.rows = 5;
 			area.placeholder = '"foo"->"bar"\n"\\s+"->" "';
-			area.addEventListener('change', async () => {
+			area.addEventListener('change', () => {
 				rs.source = area.value;
 				rs.rules = parsePipelineRuleset(area.value);
-				await this.plugin.saveSettings();
-				new Notice(`Ruleset "${rs.name}": ${rs.rules.length} rule(s) parsed`);
+				void this.plugin.saveSettings().then(() => {
+					new Notice(`Ruleset "${rs.name}": ${rs.rules.length} rule(s) parsed`);
+				});
 			});
 		});
 

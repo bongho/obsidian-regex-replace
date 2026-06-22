@@ -38,7 +38,7 @@ export default class RegexReplacePlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()) as RegexReplaceSettings;
 	}
 
 	async saveSettings(): Promise<void> {
