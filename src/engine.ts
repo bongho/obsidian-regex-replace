@@ -118,12 +118,22 @@ export class RegexEngine {
 		match: RegExpExecArray,
 		replacement: string
 	): string {
+		// Split on $$ first so literal dollar signs are never re-processed,
+		// avoiding both a sentinel character and no-control-regex violations.
 		return replacement
-			.replace(/\$\$/g, '\x00')
-			.replace(/\$&/g, matchedText)
-			.replace(/\$(\d+)/g, (_, n) => match[parseInt(n)] ?? '')
-			.replace(/\$<([^>]+)>/g, (_, name) => match.groups?.[name] ?? '')
-			.replace(/\x00/g, '$');
+			.split('$$')
+			.map(part =>
+				part
+					.replace(/\$&/g, matchedText)
+					.replace(/\$(\d+)/g, (_full: string, n: string): string => {
+						const idx = parseInt(n, 10);
+						return (match[idx] as string | undefined) ?? '';
+					})
+					.replace(/\$<([^>]+)>/g, (_full: string, name: string): string =>
+						match.groups?.[name] ?? ''
+					)
+			)
+			.join('$');
 	}
 
 	static execute(
