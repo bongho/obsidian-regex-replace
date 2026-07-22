@@ -15,7 +15,7 @@ save a complete cleanup workflow for PDFs, AI-generated text, and Markdown.
 | Regular expressions and capture groups | — | ✓ |
 | Before/after preview | — | ✓ |
 | Match highlighting | — | ✓ |
-| Replace within a selection | ✓ | ✓ |
+| Replace within a selection | — | ✓ |
 | Reusable multi-step cleanup pipelines | — | ✓ |
 | Import regex-pipeline rulesets | — | ✓ |
 
