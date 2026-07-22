@@ -1,16 +1,16 @@
 {
 	"name": "obsidian-regex-replace",
-	"version": "1.1.0",
-	"description": "Find and replace text using regular expressions with preview support for Obsidian",
+	"version": "1.1.3",
+	"description": "Safely clean up Markdown in Obsidian with regex previews and reusable multi-step pipelines",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": ["obsidian", "regex", "replace", "find-replace"],
-	"author": "",
-	"license": "MIT",
+	"keywords": ["obsidian", "obsidian-plugin", "regex", "replace", "find-replace", "markdown", "productivity"],
+	"author": "bongho",
+	"license": "0BSD",
 	"devDependencies": {
 		"@types/node": "^16.11.6",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
