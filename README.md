@@ -204,6 +204,11 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### 1.1.4
+- Reposition the plugin around safe previews and reusable cleanup pipelines
+- Add practical Markdown cleanup recipes and a built-in feature comparison
+- Align package metadata and documentation with the 0BSD license
+
 ### 1.1.0
 - Pipeline rulesets: save reusable multi-step rulesets, apply in sequence with step preview
 - Import rulesets from the regex-pipeline plugin
