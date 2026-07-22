@@ -1,9 +1,26 @@
 # Obsidian Regex Replace
 
-A powerful find and replace plugin for [Obsidian](https://obsidian.md) that supports **regular expressions** with **real-time preview** and **match highlighting**.
+Safely clean up Markdown in [Obsidian](https://obsidian.md) with **live previews**, **match highlighting**, and reusable **multi-step pipelines**.
 
-![Demo](https://img.shields.io/badge/Obsidian-Plugin-purple)
-![License](https://img.shields.io/badge/License-MIT-green)
+[![Obsidian plugin](https://img.shields.io/badge/Install_in-Obsidian-7c3aed?logo=obsidian)](https://obsidian.md/plugins?id=regex-replace)
+![License](https://img.shields.io/badge/License-0BSD-green)
+
+Preview every change before it touches your note. Run a one-off replacement or
+save a complete cleanup workflow for PDFs, AI-generated text, and Markdown.
+
+## Why Regex Replace?
+
+| Capability | Obsidian's built-in replace | Regex Replace |
+|---|---:|---:|
+| Regular expressions and capture groups | — | ✓ |
+| Before/after preview | — | ✓ |
+| Match highlighting | — | ✓ |
+| Replace within a selection | — | ✓ |
+| Reusable multi-step cleanup pipelines | — | ✓ |
+| Import regex-pipeline rulesets | — | ✓ |
+
+Everything runs locally in your vault. The plugin does not send note content to
+external services.
 
 ## Features
 
@@ -16,14 +33,32 @@ A powerful find and replace plugin for [Obsidian](https://obsidian.md) that supp
 - **Pipeline Rulesets**: Save reusable multi-step rulesets and apply them in sequence, with a step-by-step preview — and import existing [regex-pipeline](https://github.com/No3371/obsidian-regex-pipeline) rulesets
 - **Dark/Light Theme**: Optimized for both Obsidian themes
 
+## Popular cleanup recipes
+
+Copy a search and replacement into **Regex Replace**, review the preview, and
+apply it only when the result is correct for your note.
+
+| Cleanup | Search | Replace | Flags |
+|---|---|---|---|
+| Collapse repeated spaces | ` {2,}` | ` ` | `g` |
+| Remove trailing whitespace | `[ \t]+$` | *(empty)* | `gm` |
+| Collapse 3+ blank lines | `\n{3,}` | `\n\n` | `g` |
+| Change H2 headings to H3 | `^## ` | `### ` | `gm` |
+| Convert ISO dates to day/month/year | `(\d{4})-(\d{2})-(\d{2})` | `$3/$2/$1` | `g` |
+| Remove Markdown bold markers | `\*\*([^*]+)\*\*` | `$1` | `g` |
+| Convert simple wiki links to Markdown links | `\[\[([^\]|]+)\]\]` | `[$1]($1.md)` | `g` |
+
+> [!CAUTION]
+> A regular expression can match more text than intended. Check the highlighted
+> preview before applying a replacement, especially with broad patterns.
+
 ## Installation
 
 ### From Obsidian Community Plugins (Recommended)
 
-1. Open Obsidian Settings
-2. Go to **Community Plugins** and disable **Restricted Mode**
-3. Click **Browse** and search for "Regex Replace"
-4. Click **Install**, then **Enable**
+1. Open **Settings → Community plugins** in Obsidian.
+2. Select **Browse** and search for **Regex Replace**.
+3. Select **Install**, then **Enable**.
 
 ### Manual Installation
 
@@ -34,12 +69,12 @@ A powerful find and replace plugin for [Obsidian](https://obsidian.md) that supp
 
 ## Usage
 
-### Opening the Replace Dialog
+### Open the replace dialog
 
 - **Hotkey**: `Cmd/Ctrl + Shift + H`
 - **Command Palette**: `Cmd/Ctrl + P` → "Open Regex Replace"
 
-### Interface
+### Preview before replacing
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -61,7 +96,7 @@ A powerful find and replace plugin for [Obsidian](https://obsidian.md) that supp
 └─────────────────────────────────────────────┘
 ```
 
-### Regex Examples
+### Regex examples
 
 | Use Case | Search Pattern | Replace | Result |
 |----------|---------------|---------|--------|
@@ -81,7 +116,7 @@ A powerful find and replace plugin for [Obsidian](https://obsidian.md) that supp
 | `i` | Ignore Case | Case-insensitive matching |
 | `m` | Multiline | `^` and `$` match line starts/ends |
 
-### Capture Groups
+### Capture groups
 
 Use parentheses `()` to capture groups and reference them with `$1`, `$2`, etc.:
 
@@ -124,6 +159,18 @@ syntax (one rule per block):
 
 Click **Import from regex-pipeline** to read every ruleset file in
 `<vault>/.obsidian/regex-rulesets/` and convert it into a native ruleset.
+
+### Starter pipeline: clean pasted text
+
+This ruleset removes trailing whitespace, reduces large blank gaps, and
+normalizes repeated spaces. Add it under **Settings → Regex Replace → Pipeline
+rulesets**, then preview it with **Apply ruleset (pipeline)**.
+
+```text
+"[ \\t]+$"gm->""
+"\\n{3,}"g->"\\n\\n"
+" {2,}"g->" "
+```
 
 ## Settings
 
@@ -171,7 +218,7 @@ npx ts-node --transpile-only test.ts
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+0BSD License — see [LICENSE](LICENSE) for details.
 
 ## Contributing
 
