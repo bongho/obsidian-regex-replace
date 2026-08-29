@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-regex-replace",
-	"version": "1.1.4",
+	"version": "1.1.5",
 	"description": "Safely clean up Markdown in Obsidian with regex previews and reusable multi-step pipelines",
 	"main": "main.js",
 	"scripts": {

@@ -204,6 +204,11 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### 1.1.5
+- Add dynamic ruleset commands for direct Obsidian invocation (Ruleset: <name>)
+- Enable integration with Commander, Editing Toolbar, and macro plugins
+- Add maintainer info to README (Korean developer, AI researcher)
+
 ### 1.1.4
 - Reposition the plugin around safe previews and reusable cleanup pipelines
 - Add practical Markdown cleanup recipes and a built-in feature comparison
