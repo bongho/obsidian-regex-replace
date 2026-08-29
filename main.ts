@@ -1,8 +1,9 @@
-import { Editor, MarkdownView, Plugin } from 'obsidian';
+import { Editor, MarkdownView, Plugin, Notice } from 'obsidian';
 import { RegexReplaceSettings, PatternHistory, DEFAULT_SETTINGS } from './src/types';
 import { ReplaceModal } from './src/replace-modal';
 import { PipelineModal } from './src/pipeline-modal';
 import { RegexReplaceSettingTab } from './src/settings-tab';
+import { RegexEngine } from './src/engine';
 
 export default class RegexReplacePlugin extends Plugin {
 	settings: RegexReplaceSettings;
@@ -34,7 +35,49 @@ export default class RegexReplacePlugin extends Plugin {
 			}
 		});
 
+		this.registerDynamicRuleSetCommands();
+
 		this.addSettingTab(new RegexReplaceSettingTab(this.app, this));
+	}
+
+	private registerDynamicRuleSetCommands(): void {
+		// Register a command for each ruleset, allowing direct invocation
+		// from Commander, Editing Toolbar, or other plugins.
+		this.settings.ruleSets.forEach((ruleset, index) => {
+			this.addCommand({
+				id: `ruleset-${index}`,
+				name: `Ruleset: ${ruleset.name}`,
+				editorCallback: (editor: Editor) => {
+					this.applyRuleSetByIndex(editor, index);
+				}
+			});
+		});
+	}
+
+	private applyRuleSetByIndex(editor: Editor, index: number): void {
+		const ruleset = this.settings.ruleSets[index];
+		if (!ruleset) {
+			new Notice('Ruleset not found');
+			return;
+		}
+
+		if (ruleset.rules.length === 0) {
+			new Notice(`Ruleset "${ruleset.name}" has no rules`);
+			return;
+		}
+
+		const text = editor.getValue();
+		const { result, warnings } = RegexEngine.executePipeline(text, ruleset.rules);
+
+		const cursor = editor.getCursor();
+		editor.setValue(result);
+		editor.setCursor(cursor);
+
+		if (warnings.length > 0) {
+			new Notice(`Applied "${ruleset.name}" with ${warnings.length} skipped rule(s):\n${warnings.join('\n')}`);
+		} else {
+			new Notice(`Applied ruleset "${ruleset.name}" (${ruleset.rules.length} rules)`);
+		}
 	}
 
 	async loadSettings(): Promise<void> {
