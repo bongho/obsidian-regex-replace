@@ -236,6 +236,11 @@ If you find this plugin useful, consider:
 - Reporting issues or suggesting features
 - Contributing code improvements
 
+## About
+
+Maintained by [Bongho Lee](https://github.com/bongho), a Korean developer and AI researcher. 
+Feedback, issues, and pull requests are welcome!
+
 ---
 
 Made with ❤️ for the Obsidian community
