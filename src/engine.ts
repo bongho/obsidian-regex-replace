@@ -127,7 +127,7 @@ export class RegexEngine {
 					.replace(/\$&/g, matchedText)
 					.replace(/\$(\d+)/g, (_full: string, n: string): string => {
 						const idx = parseInt(n, 10);
-						return (match[idx] as string | undefined) ?? '';
+						return match[idx] ?? '';
 					})
 					.replace(/\$<([^>]+)>/g, (_full: string, name: string): string =>
 						match.groups?.[name] ?? ''

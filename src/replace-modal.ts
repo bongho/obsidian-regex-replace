@@ -245,12 +245,12 @@ export class ReplaceModal extends Modal {
 
 		const originalDiv = this.previewEl.createDiv({ cls: 'regex-replace-preview-original' });
 		originalDiv.createEl('strong', { text: 'Before: ' });
-		const originalContent = originalDiv.createEl('div', { cls: 'regex-replace-highlight-content' });
+		const originalContent = originalDiv.createDiv({ cls: 'regex-replace-highlight-content' });
 		const firstMatchEl = this.renderHighlightedText(originalContent, text, result.matches, maxLen);
 
 		const replacedDiv = this.previewEl.createDiv({ cls: 'regex-replace-preview-replaced' });
 		replacedDiv.createEl('strong', { text: 'After: ' });
-		const replacedContent = replacedDiv.createEl('div', { cls: 'regex-replace-highlight-content' });
+		const replacedContent = replacedDiv.createDiv({ cls: 'regex-replace-highlight-content' });
 		this.renderReplacedText(replacedContent, text, result.matches, maxLen);
 
 		this.renderMatchList(result.matches);
@@ -415,12 +415,12 @@ export class ReplaceModal extends Modal {
 		const displayMatches = matches.slice(0, 10);
 		for (const m of displayMatches) {
 			const li = listEl.createEl('li');
-			li.createEl('span', {
+			li.createSpan({
 				text: `"${this.truncate(m.match, 30)}"`,
 				cls: 'regex-replace-match-text'
 			});
-			li.createEl('span', { text: ' → ' });
-			li.createEl('span', {
+			li.createSpan({ text: ' → ' });
+			li.createSpan({
 				text: `"${this.truncate(m.replacement, 30)}"`,
 				cls: 'regex-replace-replacement-text'
 			});

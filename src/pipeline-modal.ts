@@ -99,7 +99,7 @@ export class PipelineModal extends Modal {
 		const final = steps.length ? steps[steps.length - 1].after : this.getText();
 		const finalDiv = this.previewEl.createDiv({ cls: 'regex-replace-preview-replaced' });
 		finalDiv.createEl('strong', { text: 'Result: ' });
-		finalDiv.createEl('div', {
+		finalDiv.createDiv({
 			text: final.length > 1000 ? final.substring(0, 1000) + '...' : final,
 			cls: 'regex-replace-highlight-content'
 		});
