@@ -54,6 +54,10 @@ apply it only when the result is correct for your note.
 
 ## Installation
 
+Requires Obsidian **1.13.0 or later** — the settings tab uses the declarative
+settings API introduced in that version, so its settings appear in Obsidian's
+settings search. Version 1.1.5 remains available for older releases.
+
 ### From Obsidian Community Plugins (Recommended)
 
 1. Open **Settings → Community plugins** in Obsidian.
