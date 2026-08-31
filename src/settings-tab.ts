@@ -18,115 +18,9 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-    // Obsidian <1.13 has no declarative settings API, so it never calls
-    // getSettingDefinitions() and renders display() instead. Keeping both
-    // lets manifest.minAppVersion stay at 0.15.0.
-    display(): void {
-        const { containerEl } = this;
-        containerEl.empty();
-
-        new Setting(containerEl)
-            .setName('Default flags')
-            .setDesc('Default regex flags (g=global, i=ignore case, m=multiline)')
-            .addText(text => text
-                .setPlaceholder('Enter flags')
-                .setValue(this.plugin.settings.defaultFlags)
-                .onChange(value => { void this.setControlValue('defaultFlags', value); }));
-
-        new Setting(containerEl)
-            .setName('Show preview')
-            .setDesc('Show before/after preview in the replace dialog')
-            .addToggle(toggle => toggle
-                .setValue(this.plugin.settings.showPreview)
-                .onChange(value => { void this.setControlValue('showPreview', value); }));
-
-        new Setting(containerEl)
-            .setName('History limit')
-            .setDesc('Maximum number of recent patterns to remember')
-            .addSlider(slider => slider
-                .setLimits(0, 50, 5)
-                .setValue(this.plugin.settings.historyLimit)
-                .setDynamicTooltip()
-                .onChange(value => { void this.setControlValue('historyLimit', value); }));
-
-        new Setting(containerEl)
-            .setName('Clear history')
-            .setDesc('Remove all saved patterns from history')
-            .addButton(button => button
-                .setButtonText('Clear')
-                .onClick(() => {
-                    this.plugin.settings.recentPatterns = [];
-                    void this.plugin.saveSettings();
-                    new Notice('History cleared');
-                }));
-
-        new Setting(containerEl)
-            .setName('Pipeline rulesets')
-            .setDesc(RULESET_DESC)
-            .setHeading();
-
-        const ruleSets = this.plugin.settings.ruleSets;
-        if (ruleSets.length === 0) {
-            containerEl.createEl('p', { text: 'No rulesets yet.' });
-        }
-
-        ruleSets.forEach((rs, index) => {
-            new Setting(containerEl)
-                .setName(rs.name || `Ruleset ${index + 1}`)
-                .setDesc(`${rs.rules.length} rule(s)`)
-                .addText(text => text
-                    .setPlaceholder('Ruleset name')
-                    .setValue(rs.name)
-                    .onChange(value => { void this.setControlValue(`ruleSets.${index}.name`, value); }))
-                .addExtraButton(button => button
-                    .setIcon('trash')
-                    .setTooltip('Delete ruleset')
-                    .onClick(() => {
-                        ruleSets.splice(index, 1);
-                        void this.plugin.saveSettings();
-                        this.refresh();
-                    }));
-
-            new Setting(containerEl)
-                .setName('Rules')
-                .setDesc(RULESET_DESC)
-                .addTextArea(area => {
-                    area.setPlaceholder(RULESET_PLACEHOLDER)
-                        .setValue(rs.source)
-                        .onChange(value => { void this.setControlValue(`ruleSets.${index}.source`, value); });
-                    area.inputEl.rows = 5;
-                });
-        });
-
-        new Setting(containerEl)
-            .addButton(button => button
-                .setButtonText('Add ruleset')
-                .onClick(() => {
-                    ruleSets.push({ name: `Ruleset ${ruleSets.length + 1}`, source: '', rules: [] });
-                    void this.plugin.saveSettings();
-                    this.refresh();
-                }));
-
-        new Setting(containerEl)
-            .setName('Import from regex-pipeline')
-            .setDesc(`Reads ruleset files from ${this.app.vault.configDir}/regex-rulesets/`)
-            .addButton(button => button
-                .setButtonText('Import')
-                .onClick(() => { void this.importFromRegexPipeline(); }));
-    }
-
-    // update() only exists on 1.13+; older builds re-render via display().
-    private refresh(): void {
-        if (typeof this.update === 'function') {
-            this.update();
-        } else {
-            this.display();
-        }
-    }
-
-    // Declarative settings (Obsidian 1.13.0+). Returning a non-empty array
-    // makes Obsidian render the tab from these definitions and index them
-    // for settings search; on 1.13+ display() below is never called.
+    // Declarative settings (Obsidian 1.13.0+, see manifest.minAppVersion).
+    // Returning a non-empty array makes Obsidian render the tab from these
+    // definitions and index them for settings search; display() is not used.
     getSettingDefinitions(): SettingDefinitionItem[] {
         const ruleSets = this.plugin.settings.ruleSets;
 
@@ -196,14 +90,14 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 onDelete: (index: number) => {
                     ruleSets.splice(index, 1);
                     void this.plugin.saveSettings();
-                    this.refresh();
+                    this.update();
                 },
                 addItem: {
                     name: 'Add ruleset',
                     action: () => {
                         ruleSets.push({ name: `Ruleset ${ruleSets.length + 1}`, source: '', rules: [] });
                         void this.plugin.saveSettings();
-                        this.refresh();
+                        this.update();
                     }
                 }
             },
@@ -303,6 +197,6 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
 
         await this.plugin.saveSettings();
         new Notice(`Imported ${imported} ruleset(s) from regex-pipeline`);
-        this.refresh();
+        this.update();
     }
 }
