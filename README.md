@@ -81,24 +81,29 @@ settings search. Version 1.1.5 remains available for older releases.
 ### Preview before replacing
 
 ```
-┌─────────────────────────────────────────────┐
-│ Search Pattern:  [Enter regex pattern]      │
-│ Replace With:    [Replacement text]         │
-│                                             │
-│ Flags: ☑ g (global)  ☐ i  ☐ m              │
-│ ☐ Replace in selection only                 │
-│                                             │
-│ 3 match(es) found                           │
-│                                             │
-│ Before: Hello [world], hello [world]        │  ← Yellow highlight
-│ After:  Hello [WORLD], hello [WORLD]        │  ← Green highlight
-│                                             │
-│ Matches (3):                                │
-│ • "world" → "WORLD"                         │
-│                                             │
-│                    [Replace All] [Cancel]   │
-└─────────────────────────────────────────────┘
++--------------------------------------+
+| Search pattern:  \b(world)\b         |
+| Replace with:    WORLD               |
+|                                      |
+| Flags: [x] g   [ ] i   [ ] m         |
+|        [ ] Replace in selection only |
+|                                      |
+| 2 match(es) found                    |
+|                                      |
+| Preview                              |
+|  Before: Hello world, hello world    |
+|  After:  Hello WORLD, hello WORLD    |
+|                                      |
+|  2 match(es):                        |
+|   - "world" -> "WORLD"               |
+|                                      |
+|           [ Replace all ] [ Cancel ] |
++--------------------------------------+
 ```
+
+`Before` highlights every match in yellow, and `After` highlights each
+replacement in green. Previously used patterns reappear in a **Recent
+patterns** dropdown below the preview.
 
 ### Regex examples
 
