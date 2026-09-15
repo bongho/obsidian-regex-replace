@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting, SettingDefinitionItem } from 'obsidian';
 import { parsePipelineRuleset } from './engine';
+import { isSelectionOnly } from './types';
 import type RegexReplacePlugin from '../main';
 
 const RULESET_DESC = 'Each ruleset is a list of rules applied in sequence. Use regex-pipeline syntax: "SEARCH"->"REPLACE" (optional inline flags, e.g. "SEARCH"gi->"REPLACE"), one rule per block.';
@@ -8,7 +9,7 @@ const RULESET_PLACEHOLDER = '"foo"->"bar"\n"\\s+"->" "';
 // Keys for the ruleset controls in the declarative path. Ruleset fields live
 // inside an array, so they need composite keys resolved by
 // get/setControlValue rather than a plain settings property name.
-const RULESET_KEY = /^ruleSets\.(\d+)\.(name|source)$/;
+const RULESET_KEY = /^ruleSets\.(\d+)\.(name|source|selectionOnly)$/;
 
 export class RegexReplaceSettingTab extends PluginSettingTab {
     plugin: RegexReplacePlugin;
@@ -60,6 +61,11 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 desc: RULESET_DESC
             },
             {
+                name: 'Apply to selection only by default',
+                desc: 'New rulesets start with "apply to selection only" on. Rulesets saved before this option existed follow it too, until their own toggle is set.',
+                control: { type: 'toggle', key: 'defaultSelectionOnly' }
+            },
+            {
                 type: 'list',
                 emptyState: 'No rulesets yet.',
                 items: ruleSets.map((rs, index) => ({
@@ -73,6 +79,14 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                                 type: 'text' as const,
                                 key: `ruleSets.${index}.name`,
                                 placeholder: 'Ruleset name'
+                            }
+                        },
+                        {
+                            name: 'Apply to selection only',
+                            desc: 'Run this ruleset on the selected text. With nothing selected it does nothing instead of rewriting the note.',
+                            control: {
+                                type: 'toggle' as const,
+                                key: `ruleSets.${index}.selectionOnly`
                             }
                         },
                         {
@@ -95,7 +109,12 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 addItem: {
                     name: 'Add ruleset',
                     action: () => {
-                        ruleSets.push({ name: `Ruleset ${ruleSets.length + 1}`, source: '', rules: [] });
+                        ruleSets.push({
+                            name: `Ruleset ${ruleSets.length + 1}`,
+                            source: '',
+                            rules: [],
+                            selectionOnly: this.plugin.settings.defaultSelectionOnly
+                        });
                         void this.plugin.saveSettings();
                         this.update();
                     }
@@ -117,12 +136,18 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
         const match = RULESET_KEY.exec(key);
         if (match) {
             const rs = this.plugin.settings.ruleSets[Number(match[1])];
-            return rs ? rs[match[2] as 'name' | 'source'] : '';
+            if (!rs) return match[2] === 'selectionOnly' ? false : '';
+            if (match[2] === 'selectionOnly') {
+                return isSelectionOnly(rs, this.plugin.settings);
+            }
+            return rs[match[2] as 'name' | 'source'];
         }
 
         switch (key) {
             case 'defaultFlags':
                 return this.plugin.settings.defaultFlags;
+            case 'defaultSelectionOnly':
+                return this.plugin.settings.defaultSelectionOnly;
             case 'showPreview':
                 return this.plugin.settings.showPreview;
             case 'historyLimit':
@@ -136,10 +161,15 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
         const settings = this.plugin.settings;
 
         const match = RULESET_KEY.exec(key);
-        if (match && typeof value === 'string') {
+        if (match) {
             const rs = settings.ruleSets[Number(match[1])];
             if (!rs) return;
-            if (match[2] === 'name') {
+            if (match[2] === 'selectionOnly') {
+                if (typeof value !== 'boolean') return;
+                rs.selectionOnly = value;
+            } else if (typeof value !== 'string') {
+                return;
+            } else if (match[2] === 'name') {
                 // The page title picks the new name up on the next render;
                 // calling update() here would rebuild the DOM mid-typing.
                 rs.name = value;
@@ -150,6 +180,8 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 new Notice(`Ruleset "${rs.name}": ${rs.rules.length} rule(s) parsed`);
                 return;
             }
+        } else if (key === 'defaultSelectionOnly' && typeof value === 'boolean') {
+            settings.defaultSelectionOnly = value;
         } else if (key === 'defaultFlags' && typeof value === 'string') {
             // Silently drop anything that is not a supported flag.
             settings.defaultFlags = value.replace(/[^gim]/g, '');
@@ -188,7 +220,12 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 const rules = parsePipelineRuleset(content);
                 if (rules.length === 0) continue;
                 const name = (file.split('/').pop() ?? file).replace(/\.txt$/, '');
-                this.plugin.settings.ruleSets.push({ name, source: content, rules });
+                this.plugin.settings.ruleSets.push({
+                    name,
+                    source: content,
+                    rules,
+                    selectionOnly: this.plugin.settings.defaultSelectionOnly
+                });
                 imported++;
             } catch (e) {
                 new Notice(`Failed to read ${file}: ${String(e)}`);

@@ -118,6 +118,14 @@ function parsePipelineRuleset(content: string): PipelineRule[] {
 	return rules;
 }
 
+// isSelectionOnly (copied from src/types.ts for testing)
+function isSelectionOnly(
+	ruleset: { selectionOnly?: boolean },
+	settings: { defaultSelectionOnly: boolean }
+): boolean {
+	return ruleset.selectionOnly ?? settings.defaultSelectionOnly;
+}
+
 // computePreviewWindow (copied from main.ts for testing)
 function computePreviewWindow(
 	textLength: number,
@@ -452,6 +460,19 @@ test('Parse multi-line replacement', () => {
 test('Parse skips blank lines between rules', () => {
 	const rules = parsePipelineRuleset('"a"->"b"\n\n\n"c"->"d"');
 	assertEqual(rules.length, 2);
+});
+
+// --- Selection-only Resolution ---
+console.log('\n--- Selection-only Resolution ---');
+
+test('Stored selectionOnly wins over the global default', () => {
+	assertEqual(isSelectionOnly({ selectionOnly: true }, { defaultSelectionOnly: false }), true);
+	assertEqual(isSelectionOnly({ selectionOnly: false }, { defaultSelectionOnly: true }), false);
+});
+
+test('Ruleset without a stored value follows the global default', () => {
+	assertEqual(isSelectionOnly({}, { defaultSelectionOnly: true }), true);
+	assertEqual(isSelectionOnly({}, { defaultSelectionOnly: false }), false);
 });
 
 // ============================================================================

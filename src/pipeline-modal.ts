@@ -1,6 +1,6 @@
 import { App, Editor, Modal, Notice } from 'obsidian';
 import { RegexEngine } from './engine';
-import { RuleSet } from './types';
+import { RuleSet, NO_SELECTION_NOTICE, isSelectionOnly } from './types';
 import type RegexReplacePlugin from '../main';
 
 export class PipelineModal extends Modal {
@@ -8,6 +8,7 @@ export class PipelineModal extends Modal {
 	private editor: Editor;
 	private selected: RuleSet | null = null;
 	private selectionOnly = false;
+	private selectionCheckbox: HTMLInputElement;
 	private previewEl: HTMLElement;
 
 	constructor(app: App, plugin: RegexReplacePlugin, editor: Editor) {
@@ -31,6 +32,9 @@ export class PipelineModal extends Modal {
 			return;
 		}
 
+		// Set before the controls are built so the selection checkbox can seed
+		// itself from the ruleset it will act on.
+		this.selected = ruleSets[0];
 		this.createRuleSetSelector(contentEl, ruleSets);
 		this.createSelectionOption(contentEl);
 		const previewContainer = contentEl.createDiv({ cls: 'regex-replace-preview-container' });
@@ -38,7 +42,6 @@ export class PipelineModal extends Modal {
 		this.previewEl = previewContainer.createDiv({ cls: 'regex-replace-preview' });
 		this.createButtons(contentEl);
 
-		this.selected = ruleSets[0];
 		this.updatePreview();
 	}
 
@@ -55,6 +58,7 @@ export class PipelineModal extends Modal {
 		select.addEventListener('change', (e) => {
 			const index = parseInt((e.target as HTMLSelectElement).value);
 			this.selected = ruleSets[index] ?? null;
+			this.syncSelectionOption();
 			this.updatePreview();
 		});
 	}
@@ -62,19 +66,37 @@ export class PipelineModal extends Modal {
 	private createSelectionOption(container: HTMLElement): void {
 		const field = container.createDiv({ cls: 'regex-replace-field' });
 		const label = field.createEl('label', { cls: 'regex-replace-flag-label' });
-		const checkbox = label.createEl('input', { type: 'checkbox' });
+		this.selectionCheckbox = label.createEl('input', { type: 'checkbox' });
 		label.appendText(' Apply to selection only');
-		checkbox.addEventListener('change', (e) => {
+		this.selectionCheckbox.addEventListener('change', (e) => {
 			this.selectionOnly = (e.target as HTMLInputElement).checked;
+			// Store the choice on the ruleset: the checkbox used to reset to off
+			// on every open, forcing the same three clicks before each run.
+			if (this.selected) {
+				this.selected.selectionOnly = this.selectionOnly;
+				void this.plugin.saveSettings();
+			}
 			this.updatePreview();
 		});
+		this.syncSelectionOption();
 	}
 
-	private getText(): string {
-		if (this.selectionOnly) {
-			return this.editor.getSelection() || this.editor.getValue();
+	// Mirrors the selected ruleset's stored value into the checkbox.
+	private syncSelectionOption(): void {
+		this.selectionOnly = this.selected
+			? isSelectionOnly(this.selected, this.plugin.settings)
+			: this.plugin.settings.defaultSelectionOnly;
+		this.selectionCheckbox.checked = this.selectionOnly;
+	}
+
+	// Returns the text the pipeline runs on, or null when the ruleset is
+	// selection-only and nothing is selected — that case is refused rather than
+	// widened to the whole note.
+	private getText(): string | null {
+		if (!this.selectionOnly) {
+			return this.editor.getValue();
 		}
-		return this.editor.getValue();
+		return this.editor.getSelection() || null;
 	}
 
 	private updatePreview(): void {
@@ -84,7 +106,13 @@ export class PipelineModal extends Modal {
 			return;
 		}
 
-		const steps = RegexEngine.previewPipeline(this.getText(), this.selected.rules);
+		const text = this.getText();
+		if (text === null) {
+			this.previewEl.setText(NO_SELECTION_NOTICE);
+			return;
+		}
+
+		const steps = RegexEngine.previewPipeline(text, this.selected.rules);
 		const list = this.previewEl.createEl('ol', { cls: 'regex-replace-pipeline-steps' });
 		for (const step of steps) {
 			const li = list.createEl('li', { cls: 'regex-replace-pipeline-step' });
@@ -96,7 +124,7 @@ export class PipelineModal extends Modal {
 			}
 		}
 
-		const final = steps.length ? steps[steps.length - 1].after : this.getText();
+		const final = steps.length ? steps[steps.length - 1].after : text;
 		const finalDiv = this.previewEl.createDiv({ cls: 'regex-replace-preview-replaced' });
 		finalDiv.createEl('strong', { text: 'Result: ' });
 		finalDiv.createDiv({
@@ -120,9 +148,14 @@ export class PipelineModal extends Modal {
 		}
 
 		const text = this.getText();
+		if (text === null) {
+			new Notice(NO_SELECTION_NOTICE);
+			return;
+		}
+
 		const { result, warnings } = RegexEngine.executePipeline(text, this.selected.rules);
 
-		if (this.selectionOnly && this.editor.getSelection()) {
+		if (this.selectionOnly) {
 			this.editor.replaceSelection(result);
 		} else {
 			const cursor = this.editor.getCursor();
