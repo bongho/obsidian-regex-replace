@@ -1,5 +1,11 @@
 import { Editor, MarkdownView, Plugin, Notice } from 'obsidian';
-import { RegexReplaceSettings, PatternHistory, DEFAULT_SETTINGS } from './src/types';
+import {
+	RegexReplaceSettings,
+	PatternHistory,
+	DEFAULT_SETTINGS,
+	NO_SELECTION_NOTICE,
+	isSelectionOnly
+} from './src/types';
 import { ReplaceModal } from './src/replace-modal';
 import { PipelineModal } from './src/pipeline-modal';
 import { RegexReplaceSettingTab } from './src/settings-tab';
@@ -66,12 +72,25 @@ export default class RegexReplacePlugin extends Plugin {
 			return;
 		}
 
-		const text = editor.getValue();
+		// A selection-only ruleset never widens to the whole note: with nothing
+		// selected it refuses instead, so a stray hotkey cannot rewrite the file.
+		const selectionOnly = isSelectionOnly(ruleset, this.settings);
+		const selection = selectionOnly ? editor.getSelection() : '';
+		if (selectionOnly && !selection) {
+			new Notice(NO_SELECTION_NOTICE);
+			return;
+		}
+
+		const text = selectionOnly ? selection : editor.getValue();
 		const { result, warnings } = RegexEngine.executePipeline(text, ruleset.rules);
 
-		const cursor = editor.getCursor();
-		editor.setValue(result);
-		editor.setCursor(cursor);
+		if (selectionOnly) {
+			editor.replaceSelection(result);
+		} else {
+			const cursor = editor.getCursor();
+			editor.setValue(result);
+			editor.setCursor(cursor);
+		}
 
 		if (warnings.length > 0) {
 			new Notice(`Applied "${ruleset.name}" with ${warnings.length} skipped rule(s):\n${warnings.join('\n')}`);

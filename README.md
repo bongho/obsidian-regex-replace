@@ -31,6 +31,7 @@ external services.
 - **Selection Mode**: Replace only within selected text
 - **Pattern History**: Save and reuse recent search patterns
 - **Pipeline Rulesets**: Save reusable multi-step rulesets and apply them in sequence, with a step-by-step preview — and import existing [regex-pipeline](https://github.com/No3371/obsidian-regex-pipeline) rulesets
+- **Selection-only Rulesets**: Mark a ruleset as selection-only and it stays that way — hotkeys included — instead of resetting every time the dialog opens
 - **Dark/Light Theme**: Optimized for both Obsidian themes
 
 ## Popular cleanup recipes
@@ -162,7 +163,22 @@ syntax (one rule per block):
 
 - **Command Palette**: "Apply ruleset (pipeline)" → pick a ruleset → review the
   step-by-step preview (match count per rule) → **Apply pipeline**.
+- **Hotkey**: each ruleset also gets its own `Ruleset: <name>` command, bindable
+  to a hotkey or a Commander / Editing Toolbar button.
 - A rule with an invalid regex is skipped and reported, never aborting the whole run.
+
+### Running a ruleset on the selection only
+
+Turn on **Apply to selection only** — either on the ruleset itself in settings,
+or with the checkbox in the pipeline dialog. Both write to the same stored
+value, so the choice survives the next open and applies to the `Ruleset: <name>`
+hotkey too.
+
+When such a ruleset runs with **nothing selected**, it does nothing and shows a
+notice. It never falls back to the whole note, so a mis-fired hotkey cannot
+rewrite the file. **Apply to selection only by default** seeds the flag on newly
+added and imported rulesets, and rulesets saved before this option existed
+follow it until their own toggle is set.
 
 ### Importing from regex-pipeline
 
@@ -191,6 +207,7 @@ Access via Settings → Regex Replace:
 | Show Preview | Display before/after preview | `true` |
 | History Limit | Max saved patterns | `10` |
 | Pipeline rulesets | Add/edit/delete/import reusable rulesets | — |
+| Apply to selection only by default | Seeds the flag on new and imported rulesets | `false` |
 
 ## Development
 
@@ -212,6 +229,12 @@ npx ts-node --transpile-only test.ts
 ```
 
 ## Changelog
+
+### Unreleased
+- Store "apply to selection only" on the ruleset, so it survives reopening the dialog ([#9](https://github.com/bongho/obsidian-regex-replace/issues/9))
+- Honour that flag in the `Ruleset: <name>` commands, which previously always rewrote the whole note
+- Refuse to run a selection-only ruleset with an empty selection instead of falling back to the whole note
+- Add a global "apply to selection only by default" setting that seeds new and imported rulesets
 
 ### 1.1.5
 - Add dynamic ruleset commands for direct Obsidian invocation (Ruleset: <name>)
