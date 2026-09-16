@@ -230,7 +230,7 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
-### Unreleased
+### 1.1.8
 - Store "apply to selection only" on the ruleset, so it survives reopening the dialog ([#9](https://github.com/bongho/obsidian-regex-replace/issues/9))
 - Honour that flag in the `Ruleset: <name>` commands, which previously always rewrote the whole note
 - Refuse to run a selection-only ruleset with an empty selection instead of falling back to the whole note
