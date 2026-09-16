@@ -235,6 +235,16 @@ npx ts-node --transpile-only test.ts
 - Honour that flag in the `Ruleset: <name>` commands, which previously always rewrote the whole note
 - Refuse to run a selection-only ruleset with an empty selection instead of falling back to the whole note
 - Add a global "apply to selection only by default" setting that seeds new and imported rulesets
+- Run the plugin review's lint ruleset locally (eslint 10 + eslint-plugin-obsidianmd)
+
+### 1.1.7
+- Drop the imperative `display()` fallback; the settings tab is declarative only
+- Raise `minAppVersion` to 1.13.0 — vaults below it stay on 1.1.5 via `versions.json`
+
+### 1.1.6
+- Adopt the declarative settings API, so settings are indexed by Obsidian's settings search
+- Replace remaining `document.createElement` calls with Obsidian's `createEl` helpers
+- Tighten capture-group substitution types in `src/engine.ts`
 
 ### 1.1.5
 - Add dynamic ruleset commands for direct Obsidian invocation (Ruleset: <name>)
