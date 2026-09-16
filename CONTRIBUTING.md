@@ -32,9 +32,14 @@ Each of these is missing on purpose, not by oversight. The reasoning is here so
 it doesn't have to be re-derived — or "fixed" in a way that reintroduces the
 problem it was avoiding.
 
-**No test runner.** No Vitest/Jest setup, no `test` script. The `test.js` and
-`test.ts` files in the repo root predate this and are referenced by nothing — no
-runner, no script. Treat them as leftovers rather than a partial suite.
+**No test runner.** No Vitest/Jest setup and no `test` script, so CI's
+`test --if-present` step is inert on every push. `test.js` is a stale duplicate
+— treat it as a leftover. `test.ts` is not: it is maintained by hand and gains
+cases alongside feature work (the "Selection-only Resolution" block came in with
+#9). It copies the logic it tests out of `src/` rather than importing it, so a
+green run proves the copy correct, not the shipped code. Run it with
+`npx ts-node --transpile-only test.ts` before cutting a release — nothing else
+will.
 
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required
@@ -67,3 +72,9 @@ Manual, for now: bump the version, `npm run build`, and attach `main.js`,
 `manifest.json`, and `styles.css` to a GitHub release. `npm version <x.y.z>`
 runs `version-bump.mjs`, which syncs `manifest.json` and `versions.json` from
 `package.json`. Tags in this repo carry no `v` prefix.
+
+This machine's default `gh` account is not this repo's owner, and git's
+credential helper follows whichever account `gh` has active — so `git push`,
+`gh pr merge`, and `gh release create` all fail with 403 until
+`gh auth switch -u bongho`. Check `gh auth status` before pushing rather than
+after the rejection, and switch back only once no git operations are left.
