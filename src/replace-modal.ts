@@ -1,6 +1,12 @@
 import { App, Editor, Modal, Notice } from 'obsidian';
 import { RegexEngine, computePreviewWindow, PREVIEW_CONTEXT_BEFORE } from './engine';
-import { ReplaceResult, MatchInfo, PatternHistory } from './types';
+import {
+	ReplaceResult,
+	MatchInfo,
+	PatternHistory,
+	NO_SELECTION_NOTICE,
+	resolveTargetText
+} from './types';
 import type RegexReplacePlugin from '../main';
 
 export class ReplaceModal extends Modal {
@@ -179,11 +185,12 @@ export class ReplaceModal extends Modal {
 		return flags;
 	}
 
-	private getText(): string {
-		if (this.selectionOnly) {
-			return this.editor.getSelection() || this.editor.getValue();
-		}
-		return this.editor.getValue();
+	private getText(): string | null {
+		return resolveTargetText(
+			this.selectionOnly,
+			this.editor.getSelection(),
+			this.editor.getValue()
+		);
 	}
 
 	private updatePreview(): void {
@@ -197,6 +204,11 @@ export class ReplaceModal extends Modal {
 		}
 
 		const text = this.getText();
+		if (text === null) {
+			this.showNoSelection();
+			return;
+		}
+
 		const result = RegexEngine.preview(text, pattern, replacement, flags);
 
 		if ('error' in result) {
@@ -212,6 +224,15 @@ export class ReplaceModal extends Modal {
 		if (this.previewEl) {
 			this.previewEl.empty();
 			this.previewEl.setText('Enter a search pattern to see preview');
+		}
+	}
+
+	private showNoSelection(): void {
+		this.matchCountEl.removeClass('regex-replace-error');
+		this.matchCountEl.setText('');
+		if (this.previewEl) {
+			this.previewEl.empty();
+			this.previewEl.setText(NO_SELECTION_NOTICE);
 		}
 	}
 
@@ -445,6 +466,11 @@ export class ReplaceModal extends Modal {
 		}
 
 		const text = this.getText();
+		if (text === null) {
+			new Notice(NO_SELECTION_NOTICE);
+			return;
+		}
+
 		const result = RegexEngine.execute(text, pattern, replacement, flags);
 
 		if (typeof result === 'object' && 'error' in result) {
@@ -469,7 +495,9 @@ export class ReplaceModal extends Modal {
 	}
 
 	private applyReplacement(result: string): void {
-		if (this.selectionOnly && this.editor.getSelection()) {
+		// getText() already refused an empty selection, so a selection-only run
+		// always has something to replace by the time it gets here.
+		if (this.selectionOnly) {
 			this.editor.replaceSelection(result);
 		} else {
 			const cursor = this.editor.getCursor();
