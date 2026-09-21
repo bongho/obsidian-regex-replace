@@ -1,6 +1,6 @@
 import { App, Editor, Modal, Notice } from 'obsidian';
 import { RegexEngine } from './engine';
-import { RuleSet, NO_SELECTION_NOTICE, isSelectionOnly } from './types';
+import { RuleSet, NO_SELECTION_NOTICE, isSelectionOnly, resolveTargetText } from './types';
 import type RegexReplacePlugin from '../main';
 
 export class PipelineModal extends Modal {
@@ -93,10 +93,11 @@ export class PipelineModal extends Modal {
 	// selection-only and nothing is selected — that case is refused rather than
 	// widened to the whole note.
 	private getText(): string | null {
-		if (!this.selectionOnly) {
-			return this.editor.getValue();
-		}
-		return this.editor.getSelection() || null;
+		return resolveTargetText(
+			this.selectionOnly,
+			this.editor.getSelection(),
+			this.editor.getValue()
+		);
 	}
 
 	private updatePreview(): void {

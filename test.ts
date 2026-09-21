@@ -126,6 +126,16 @@ function isSelectionOnly(
 	return ruleset.selectionOnly ?? settings.defaultSelectionOnly;
 }
 
+// resolveTargetText (copied from src/types.ts for testing)
+function resolveTargetText(
+	selectionOnly: boolean,
+	selection: string,
+	wholeNote: string
+): string | null {
+	if (!selectionOnly) return wholeNote;
+	return selection || null;
+}
+
 // computePreviewWindow (copied from main.ts for testing)
 function computePreviewWindow(
 	textLength: number,
@@ -473,6 +483,24 @@ test('Stored selectionOnly wins over the global default', () => {
 test('Ruleset without a stored value follows the global default', () => {
 	assertEqual(isSelectionOnly({}, { defaultSelectionOnly: true }), true);
 	assertEqual(isSelectionOnly({}, { defaultSelectionOnly: false }), false);
+});
+
+// --- Selection-only Target Text ---
+console.log('\n--- Selection-only Target Text ---');
+
+test('Selection-only with a selection targets the selection', () => {
+	assertEqual(resolveTargetText(true, 'picked', 'whole note'), 'picked');
+});
+
+test('Selection-only with no selection refuses instead of widening', () => {
+	// The bug this guards: an empty selection used to fall back to the whole
+	// note, so "replace in selection only" rewrote the entire file.
+	assertEqual(resolveTargetText(true, '', 'whole note'), null);
+});
+
+test('Whole-note mode ignores the selection', () => {
+	assertEqual(resolveTargetText(false, 'picked', 'whole note'), 'whole note');
+	assertEqual(resolveTargetText(false, '', 'whole note'), 'whole note');
 });
 
 // ============================================================================

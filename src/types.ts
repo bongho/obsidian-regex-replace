@@ -47,6 +47,19 @@ export function isSelectionOnly(
 	return ruleset.selectionOnly ?? settings.defaultSelectionOnly;
 }
 
+// The text a run operates on, or null when the run is selection-only and
+// nothing is selected. Both modals route through this, so neither can widen a
+// selection-only run to the whole note — the replace modal used to do exactly
+// that, because it carried its own copy of this decision.
+export function resolveTargetText(
+	selectionOnly: boolean,
+	selection: string,
+	wholeNote: string
+): string | null {
+	if (!selectionOnly) return wholeNote;
+	return selection || null;
+}
+
 // One stage of a pipeline preview: the text before/after this rule ran.
 export interface PipelineStep {
 	stepIndex: number;
