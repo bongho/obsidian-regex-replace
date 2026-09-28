@@ -230,6 +230,15 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### 1.2.0
+- **Replace across the whole vault or a folder** with the new "Replace in vault" command ([#15](https://github.com/bongho/obsidian-regex-replace/pull/15))
+- Scan streams as it reads, so progress is real and the run can be cancelled
+- Matching runs in a worker with a timeout, so a pattern that backtracks is stopped instead of freezing Obsidian
+- Selection is per file; skip frontmatter with a toggle; exclude paths with a glob list in settings
+- Undo a whole run with "Undo last vault replace" — files edited since the replace are left alone
+- Apply names the expected cost before you confirm, and warns past a configurable file count
+- Show the "select some text first" notice in the find/replace dialog even with the preview turned off ([#14](https://github.com/bongho/obsidian-regex-replace/pull/14))
+
 ### 1.1.9
 - Stop "Replace in selection only" in the find/replace dialog from rewriting the whole note when nothing is selected ([#11](https://github.com/bongho/obsidian-regex-replace/issues/11))
 
