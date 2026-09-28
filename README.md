@@ -230,6 +230,9 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### 1.1.9
+- Stop "Replace in selection only" in the find/replace dialog from rewriting the whole note when nothing is selected ([#11](https://github.com/bongho/obsidian-regex-replace/issues/11))
+
 ### 1.1.8
 - Store "apply to selection only" on the ruleset, so it survives reopening the dialog ([#9](https://github.com/bongho/obsidian-regex-replace/issues/9))
 - Honour that flag in the `Ruleset: <name>` commands, which previously always rewrote the whole note
