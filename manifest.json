@@ -3,7 +3,7 @@
 	"name": "Regex Replace",
 	"version": "1.2.1",
 	"minAppVersion": "1.13.0",
-	"description": "Regex find and replace across your whole vault or one note — preview matches, choose files, undo the run. Includes reusable multi-step pipelines.",
+	"description": "Regex find and replace in one note or, on desktop, across your whole vault — preview matches, choose files, undo the run. Includes reusable multi-step pipelines.",
 	"author": "bongho",
 	"authorUrl": "https://github.com/bongho",
 	"isDesktopOnly": false
