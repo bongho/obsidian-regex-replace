@@ -227,12 +227,15 @@ export class ReplaceModal extends Modal {
 		}
 	}
 
+	// The notice goes on the match count rather than the preview, matching
+	// showError(). previewEl only exists while the preview setting is on, so
+	// putting it there left anyone who turned the preview off with a blank
+	// dialog and no hint until the Notice fired on Replace.
 	private showNoSelection(): void {
 		this.matchCountEl.removeClass('regex-replace-error');
-		this.matchCountEl.setText('');
+		this.matchCountEl.setText(NO_SELECTION_NOTICE);
 		if (this.previewEl) {
 			this.previewEl.empty();
-			this.previewEl.setText(NO_SELECTION_NOTICE);
 		}
 	}
 
