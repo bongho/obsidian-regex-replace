@@ -130,7 +130,13 @@ export default class RegexReplacePlugin extends Plugin {
 			return;
 		}
 
-		const outcome = await undoVaultReplace(this.app, receipt);
+		const progress = new Notice(`Undoing 0 / ${receipt.files.length}…`, 0);
+		const outcome = await undoVaultReplace(this.app, receipt, async (done, total) => {
+			progress.setMessage(`Undoing ${done} / ${total}…`);
+			await new Promise(resolve => window.setTimeout(resolve, 0));
+		});
+		progress.hide();
+
 		this.settings.lastVaultReplace = null;
 		await this.saveSettings();
 

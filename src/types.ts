@@ -5,6 +5,7 @@ export interface RegexReplaceSettings {
 	defaultSelectionOnly: boolean;
 	vaultExcludeGlobs: string;
 	vaultMatchTimeoutMs: number;
+	vaultApplyWarnFiles: number;
 	lastVaultReplace: ApplyReceipt | null;
 	recentPatterns: PatternHistory[];
 	ruleSets: RuleSet[];
@@ -82,9 +83,8 @@ export interface VaultMatchInfo {
 	text: string;
 }
 
-// The record an undo runs from. `before` is the file as it was immediately
-// before the write, `afterHash` fingerprints what we wrote, so undo can refuse
-// a file that changed again afterwards without storing a second full copy.
+// The record an undo runs from. `afterHash` fingerprints what the run wrote so
+// undo can refuse a file that changed again afterwards.
 export interface ApplyReceipt {
 	startedAt: number;
 	pattern: string;
@@ -93,11 +93,55 @@ export interface ApplyReceipt {
 	files: ReceiptEntry[];
 }
 
+// Normally `edits` carries the reversal and scales with match count. `before`
+// is the fallback for the rare file whose per-match replacements cannot be
+// replayed back into the text the run actually wrote — storing the whole file
+// is wasteful but always correct, and a vault-wide run that used it everywhere
+// measured 41.8 MB, which is why it is the exception and not the rule.
 export interface ReceiptEntry {
 	path: string;
-	before: string;
 	afterHash: number;
 	matchCount: number;
+	edits?: ReceiptEdit[];
+	before?: string;
+}
+
+// One replacement, positioned in the pre-run text.
+export interface ReceiptEdit {
+	index: number;
+	before: string;
+	after: string;
+}
+
+// Replays edits forward onto the original text. Used at apply time to prove the
+// edit list reproduces what will be written — if it does not, the entry falls
+// back to storing the whole file.
+export function replayEdits(before: string, edits: ReceiptEdit[]): string {
+	let out = '';
+	let cursor = 0;
+	for (const edit of edits) {
+		out += before.slice(cursor, edit.index) + edit.after;
+		cursor = edit.index + edit.before.length;
+	}
+	return out + before.slice(cursor);
+}
+
+// Reverses edits against the text the run produced. Walks backwards so each
+// splice leaves earlier positions untouched.
+export function reverseEdits(after: string, edits: ReceiptEdit[]): string {
+	let delta = 0;
+	const placed = edits.map(edit => {
+		const at = edit.index + delta;
+		delta += edit.after.length - edit.before.length;
+		return { at, edit };
+	});
+
+	let out = after;
+	for (let i = placed.length - 1; i >= 0; i--) {
+		const { at, edit } = placed[i];
+		out = out.slice(0, at) + edit.before + out.slice(at + edit.after.length);
+	}
+	return out;
 }
 
 // FNV-1a. Not cryptographic — it only has to notice that a file changed.
@@ -141,6 +185,7 @@ export const DEFAULT_SETTINGS: RegexReplaceSettings = {
 	defaultSelectionOnly: false,
 	vaultExcludeGlobs: '',
 	vaultMatchTimeoutMs: 2000,
+	vaultApplyWarnFiles: 1000,
 	lastVaultReplace: null,
 	recentPatterns: [],
 	ruleSets: []

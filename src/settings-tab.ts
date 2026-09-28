@@ -131,6 +131,11 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 control: { type: 'slider', key: 'vaultMatchTimeoutMs', min: 500, max: 10000, step: 500 }
             },
             {
+                name: 'Vault replace: warn above',
+                desc: 'Show a stronger warning before replacing in more files than this. Writing measured about 2.7ms per file, so a few thousand files is several seconds that cannot be interrupted.',
+                control: { type: 'slider', key: 'vaultApplyWarnFiles', min: 100, max: 5000, step: 100 }
+            },
+            {
                 name: 'Import from regex-pipeline',
                 desc: `Reads ruleset files from ${this.app.vault.configDir}/regex-rulesets/`,
                 render: (setting: Setting) => {
@@ -162,6 +167,8 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 return this.plugin.settings.vaultExcludeGlobs;
             case 'vaultMatchTimeoutMs':
                 return this.plugin.settings.vaultMatchTimeoutMs;
+            case 'vaultApplyWarnFiles':
+                return this.plugin.settings.vaultApplyWarnFiles;
             case 'showPreview':
                 return this.plugin.settings.showPreview;
             case 'historyLimit':
@@ -200,6 +207,8 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
             settings.vaultExcludeGlobs = value;
         } else if (key === 'vaultMatchTimeoutMs' && typeof value === 'number') {
             settings.vaultMatchTimeoutMs = value;
+        } else if (key === 'vaultApplyWarnFiles' && typeof value === 'number') {
+            settings.vaultApplyWarnFiles = value;
         } else if (key === 'defaultFlags' && typeof value === 'string') {
             // Silently drop anything that is not a supported flag.
             settings.defaultFlags = value.replace(/[^gim]/g, '');

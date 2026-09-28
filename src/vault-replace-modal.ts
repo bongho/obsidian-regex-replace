@@ -9,6 +9,10 @@ import type RegexReplacePlugin from '../main';
 // a runaway pattern is blamed on a narrow set of files.
 const BATCH_SIZE = 50;
 
+// Measured cost of one file's snapshot-and-write on a 6,039-file vault:
+// 15,570.9ms across 5,840 files.
+const MS_PER_FILE = 2.7;
+
 export class VaultReplaceModal extends Modal {
 	private plugin: RegexReplacePlugin;
 	private patternInput: HTMLInputElement;
@@ -242,7 +246,7 @@ export class VaultReplaceModal extends Modal {
 			this.awaitingConfirm = true;
 			this.applyButton.setText(`Confirm — replace in ${chosen.length} file(s)`);
 			this.applyButton.addClass('mod-warning');
-			this.statusEl.setText(`About to change ${matches} match(es) in ${chosen.length} file(s). Click again to apply.`);
+			this.statusEl.setText(this.confirmText(chosen.length, matches));
 			return;
 		}
 		this.resetConfirm();
@@ -257,7 +261,11 @@ export class VaultReplaceModal extends Modal {
 				flags: this.flagsInput.value,
 				replacement: this.replacementInput.value,
 				skipFrontmatter: this.frontmatterCheckbox.checked,
-				saveReceipt: (receipt: ApplyReceipt) => this.plugin.saveVaultReceipt(receipt)
+				saveReceipt: (receipt: ApplyReceipt) => this.plugin.saveVaultReceipt(receipt),
+				onProgress: async (done, total) => {
+					this.statusEl.setText(`Writing ${done} / ${total}…`);
+					await new Promise(resolve => window.setTimeout(resolve, 0));
+				}
 			});
 			this.reportApply(outcome);
 		} catch (e) {
@@ -265,6 +273,18 @@ export class VaultReplaceModal extends Modal {
 		} finally {
 			this.scanButton.disabled = false;
 		}
+	}
+
+	// Writing measured ~2.7ms per file, so the wait is worth naming before the
+	// click rather than after it. Past the threshold the run is long enough that
+	// "it looks frozen" becomes the likely reading.
+	private confirmText(files: number, matches: number): string {
+		const seconds = (files * MS_PER_FILE) / 1000;
+		const estimate = seconds >= 1 ? ` — roughly ${Math.round(seconds)}s of writing` : '';
+		const warning = files >= this.plugin.settings.vaultApplyWarnFiles
+			? ' This runs to the end once started; undo it afterwards rather than interrupting it.'
+			: '';
+		return `About to change ${matches} match(es) in ${files} file(s)${estimate}. Click again to apply.${warning}`;
 	}
 
 	private resetConfirm(): void {

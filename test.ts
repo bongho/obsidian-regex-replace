@@ -183,6 +183,34 @@ function hashText(text: string): number {
 	return hash >>> 0;
 }
 
+// replayEdits / reverseEdits (copied from src/types.ts for testing)
+interface ReceiptEdit { index: number; before: string; after: string; }
+
+function replayEdits(before: string, edits: ReceiptEdit[]): string {
+	let out = '';
+	let cursor = 0;
+	for (const edit of edits) {
+		out += before.slice(cursor, edit.index) + edit.after;
+		cursor = edit.index + edit.before.length;
+	}
+	return out + before.slice(cursor);
+}
+
+function reverseEdits(after: string, edits: ReceiptEdit[]): string {
+	let delta = 0;
+	const placed = edits.map(edit => {
+		const at = edit.index + delta;
+		delta += edit.after.length - edit.before.length;
+		return { at, edit };
+	});
+	let out = after;
+	for (let i = placed.length - 1; i >= 0; i--) {
+		const { at, edit } = placed[i];
+		out = out.slice(0, at) + edit.before + out.slice(at + edit.after.length);
+	}
+	return out;
+}
+
 // computePreviewWindow (copied from main.ts for testing)
 function computePreviewWindow(
 	textLength: number,
@@ -606,6 +634,69 @@ test('Hash stays inside unsigned 32-bit range', () => {
 		const h = hashText(s);
 		assertTrue(h >= 0 && h <= 0xffffffff && Number.isInteger(h));
 	}
+});
+
+// --- Receipt Edits (round trip) ---
+console.log('\n--- Receipt Edits ---');
+
+const roundTrip = (before: string, edits: ReceiptEdit[]) => {
+	const after = replayEdits(before, edits);
+	return { after, back: reverseEdits(after, edits) };
+};
+
+test('Replacement that grows the text reverses exactly', () => {
+	const before = 'see [[a]] and [[b]] here';
+	const edits = [
+		{ index: 4, before: '[[', after: '[[ ' },
+		{ index: 14, before: '[[', after: '[[ ' }
+	];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'see [[ a]] and [[ b]] here');
+	assertEqual(r.back, before);
+});
+
+test('Replacement that shrinks the text reverses exactly', () => {
+	const before = 'ALPHA and ALPHA again';
+	const edits = [
+		{ index: 0, before: 'ALPHA', after: 'X' },
+		{ index: 10, before: 'ALPHA', after: 'X' }
+	];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'X and X again');
+	assertEqual(r.back, before);
+});
+
+test('Deletion reverses exactly', () => {
+	const before = 'keep  drop  keep';
+	const edits = [{ index: 6, before: 'drop', after: '' }];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'keep    keep');
+	assertEqual(r.back, before);
+});
+
+test('An edit at position zero and one at the end both survive', () => {
+	const before = 'xmiddlex';
+	const edits = [
+		{ index: 0, before: 'x', after: 'YY' },
+		{ index: 7, before: 'x', after: 'ZZZ' }
+	];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'YYmiddleZZZ');
+	assertEqual(r.back, before);
+});
+
+test('Korean text round-trips (code units, not bytes)', () => {
+	const before = '노트 ALPHA 노트';
+	const edits = [{ index: 3, before: 'ALPHA', after: '베타' }];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, '노트 베타 노트');
+	assertEqual(r.back, before);
+});
+
+test('No edits leaves the text alone in both directions', () => {
+	const r = roundTrip('unchanged', []);
+	assertEqual(r.after, 'unchanged');
+	assertEqual(r.back, 'unchanged');
 });
 
 // ============================================================================
