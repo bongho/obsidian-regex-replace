@@ -9,6 +9,7 @@ import type RegexReplacePlugin from '../main';
 export class VaultReplaceModal extends Modal {
 	private plugin: RegexReplacePlugin;
 	private patternInput: HTMLInputElement;
+	private flagsInput: HTMLInputElement;
 	private folderInput: HTMLInputElement;
 	private frontmatterCheckbox: HTMLInputElement;
 	private statusEl: HTMLElement;
@@ -31,6 +32,11 @@ export class VaultReplaceModal extends Modal {
 		});
 
 		this.patternInput = this.createTextField(contentEl, 'Search pattern', '\\[\\[([^\\]]+)\\]\\]');
+		// Flags are a field, not the global default: a vault scan is usually a
+		// line-anchored pattern, and silently running it without `m` reports
+		// zero matches rather than an error.
+		this.flagsInput = this.createTextField(contentEl, 'Flags', 'gm');
+		this.flagsInput.value = this.plugin.settings.defaultFlags;
 		this.folderInput = this.createTextField(contentEl, 'Folder (blank = whole vault)', '');
 		this.frontmatterCheckbox = this.createCheckbox(contentEl, 'Skip frontmatter');
 
@@ -86,7 +92,7 @@ export class VaultReplaceModal extends Modal {
 			const run = await runVaultMatch(
 				payloads,
 				pattern,
-				this.plugin.settings.defaultFlags,
+				this.flagsInput.value,
 				this.plugin.settings.vaultMatchTimeoutMs,
 				(done, total) => this.statusEl.setText(`Matching ${done} / ${total}…`)
 			);
