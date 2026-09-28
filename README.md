@@ -277,7 +277,7 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
-### Unreleased
+### 1.2.2
 - Register the vault commands on desktop only. The protection against a runaway pattern is a worker the main thread can terminate, and that path has never run on a mobile device — `isDesktopOnly` stays `false`, so the rest of the plugin is unaffected ([#18](https://github.com/bongho/obsidian-regex-replace/pull/18))
 - Document vault-wide replace in the README: usage, what undo restores, and the three vault settings
 - Say in the plugin description that vault-wide replace is desktop-only, so mobile users are not promised a command they will not see
