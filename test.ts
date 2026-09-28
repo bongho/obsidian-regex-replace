@@ -136,6 +136,86 @@ function resolveTargetText(
 	return selection || null;
 }
 
+// globToRegExp / isExcluded (copied from src/vault-scan.ts for testing)
+function globToRegExp(pattern: string): RegExp {
+	let out = '';
+	for (let i = 0; i < pattern.length; i++) {
+		const c = pattern[i];
+		if (c === '*' && pattern[i + 1] === '*') {
+			if (pattern[i + 2] === '/') {
+				out += '(?:[^/]+/)*';
+				i += 2;
+			} else {
+				out += '.*';
+				i += 1;
+			}
+		} else if (c === '*') {
+			out += '[^/]*';
+		} else if (c === '?') {
+			out += '[^/]';
+		} else {
+			out += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		}
+	}
+	return new RegExp(`^${out}$`);
+}
+
+const GLOB_CHARS = /[*?]/;
+
+function isExcluded(path: string, patterns: string[]): boolean {
+	return patterns.some(raw => {
+		const pattern = raw.trim().replace(/\/+$/, '');
+		if (!pattern) return false;
+		if (!GLOB_CHARS.test(pattern)) {
+			return path === pattern || path.startsWith(`${pattern}/`);
+		}
+		return globToRegExp(pattern).test(path);
+	});
+}
+
+// hashText (copied from src/types.ts for testing)
+function hashText(text: string): number {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		hash ^= text.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return hash >>> 0;
+}
+
+// replayEdits / reverseEdits (copied from src/types.ts for testing)
+interface ReceiptEdit { index: number; before: string; after: string; }
+
+function replayEdits(before: string, edits: ReceiptEdit[]): string {
+	let out = '';
+	let cursor = 0;
+	for (const edit of edits) {
+		out += before.slice(cursor, edit.index) + edit.after;
+		cursor = edit.index + edit.before.length;
+	}
+	return out + before.slice(cursor);
+}
+
+function reverseEdits(after: string, edits: ReceiptEdit[]): string {
+	let delta = 0;
+	const placed = edits.map(edit => {
+		const at = edit.index + delta;
+		delta += edit.after.length - edit.before.length;
+		return { at, edit };
+	});
+	let out = after;
+	for (let i = placed.length - 1; i >= 0; i--) {
+		const { at, edit } = placed[i];
+		out = out.slice(0, at) + edit.before + out.slice(at + edit.after.length);
+	}
+	return out;
+}
+
+// withGlobalFlag (copied from src/types.ts for testing)
+function withGlobalFlag(flags: string): string {
+	return flags.includes('g') ? flags : `${flags}g`;
+}
+
 // computePreviewWindow (copied from main.ts for testing)
 function computePreviewWindow(
 	textLength: number,
@@ -501,6 +581,144 @@ test('Selection-only with no selection refuses instead of widening', () => {
 test('Whole-note mode ignores the selection', () => {
 	assertEqual(resolveTargetText(false, 'picked', 'whole note'), 'whole note');
 	assertEqual(resolveTargetText(false, '', 'whole note'), 'whole note');
+});
+
+// --- Vault Scan Excludes ---
+console.log('\n--- Vault Scan Excludes ---');
+
+test('A bare folder name covers everything beneath it', () => {
+	assertEqual(isExcluded('Archive/2020/note.md', ['Archive']), true);
+	assertEqual(isExcluded('Archived/note.md', ['Archive']), false);
+});
+
+test('Single star stays inside one path segment', () => {
+	assertEqual(isExcluded('Templates/daily.md', ['Templates/*']), true);
+	assertEqual(isExcluded('Templates/work/daily.md', ['Templates/*']), false);
+});
+
+test('Double star crosses segments and allows none', () => {
+	assertEqual(isExcluded('Templates/work/daily.md', ['Templates/**']), true);
+	assertEqual(isExcluded('a/b/c.md', ['a/**/c.md']), true);
+	assertEqual(isExcluded('a/c.md', ['a/**/c.md']), true);
+});
+
+test('Extension globs match anywhere the pattern says', () => {
+	assertEqual(isExcluded('draw.excalidraw.md', ['*.excalidraw.md']), true);
+	assertEqual(isExcluded('sub/draw.excalidraw.md', ['*.excalidraw.md']), false);
+	assertEqual(isExcluded('sub/draw.excalidraw.md', ['**/*.excalidraw.md']), true);
+});
+
+test('Dots in a pattern are literal, not any-character', () => {
+	assertEqual(isExcluded('axmd/note.md', ['a.md']), false);
+});
+
+test('Blank lines never exclude anything', () => {
+	assertEqual(isExcluded('note.md', ['', '   ']), false);
+});
+
+// --- Receipt Fingerprint ---
+console.log('\n--- Receipt Fingerprint ---');
+
+test('Same text hashes the same, different text does not', () => {
+	assertEqual(hashText('# Heading\n\nbody'), hashText('# Heading\n\nbody'));
+	assertTrue(hashText('a') !== hashText('b'));
+});
+
+test('A one-character edit changes the hash', () => {
+	// This is the whole job: undo must refuse a file that moved since the write.
+	assertTrue(hashText('note text') !== hashText('note texts'));
+	assertTrue(hashText('note text') !== hashText('note Text'));
+});
+
+test('Empty text hashes to the FNV offset basis', () => {
+	assertEqual(hashText(''), 0x811c9dc5);
+});
+
+test('Hash stays inside unsigned 32-bit range', () => {
+	for (const s of ['', 'a', '한글 노트', 'x'.repeat(5000)]) {
+		const h = hashText(s);
+		assertTrue(h >= 0 && h <= 0xffffffff && Number.isInteger(h));
+	}
+});
+
+// --- Receipt Edits (round trip) ---
+console.log('\n--- Receipt Edits ---');
+
+const roundTrip = (before: string, edits: ReceiptEdit[]) => {
+	const after = replayEdits(before, edits);
+	return { after, back: reverseEdits(after, edits) };
+};
+
+test('Replacement that grows the text reverses exactly', () => {
+	const before = 'see [[a]] and [[b]] here';
+	const edits = [
+		{ index: 4, before: '[[', after: '[[ ' },
+		{ index: 14, before: '[[', after: '[[ ' }
+	];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'see [[ a]] and [[ b]] here');
+	assertEqual(r.back, before);
+});
+
+test('Replacement that shrinks the text reverses exactly', () => {
+	const before = 'ALPHA and ALPHA again';
+	const edits = [
+		{ index: 0, before: 'ALPHA', after: 'X' },
+		{ index: 10, before: 'ALPHA', after: 'X' }
+	];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'X and X again');
+	assertEqual(r.back, before);
+});
+
+test('Deletion reverses exactly', () => {
+	const before = 'keep  drop  keep';
+	const edits = [{ index: 6, before: 'drop', after: '' }];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'keep    keep');
+	assertEqual(r.back, before);
+});
+
+test('An edit at position zero and one at the end both survive', () => {
+	const before = 'xmiddlex';
+	const edits = [
+		{ index: 0, before: 'x', after: 'YY' },
+		{ index: 7, before: 'x', after: 'ZZZ' }
+	];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, 'YYmiddleZZZ');
+	assertEqual(r.back, before);
+});
+
+test('Korean text round-trips (code units, not bytes)', () => {
+	const before = '노트 ALPHA 노트';
+	const edits = [{ index: 3, before: 'ALPHA', after: '베타' }];
+	const r = roundTrip(before, edits);
+	assertEqual(r.after, '노트 베타 노트');
+	assertEqual(r.back, before);
+});
+
+test('No edits leaves the text alone in both directions', () => {
+	const r = roundTrip('unchanged', []);
+	assertEqual(r.after, 'unchanged');
+	assertEqual(r.back, 'unchanged');
+});
+
+// --- Vault Flag Normalisation ---
+console.log('\n--- Vault Flag Normalisation ---');
+
+test('Flags without g gain it', () => {
+	// The bug this guards: counting forces g, String.replace does not, so an
+	// "i"-only run reported every match and changed only the first.
+	assertEqual(withGlobalFlag('i'), 'ig');
+	assertEqual(withGlobalFlag(''), 'g');
+	assertEqual(withGlobalFlag('im'), 'img');
+});
+
+test('Flags already carrying g are untouched', () => {
+	assertEqual(withGlobalFlag('g'), 'g');
+	assertEqual(withGlobalFlag('gm'), 'gm');
+	assertEqual(withGlobalFlag('gi'), 'gi');
 });
 
 // ============================================================================

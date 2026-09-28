@@ -121,6 +121,21 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 }
             },
             {
+                name: 'Vault scan: excluded paths',
+                desc: "One glob per line, matched against the vault-relative path (Archive, Templates/**, *.excalidraw.md). Obsidian's own excluded-files setting is not readable from the plugin API, so this list is separate from it. Hidden folders are already skipped.",
+                control: { type: 'textarea', key: 'vaultExcludeGlobs', placeholder: 'Archive\nTemplates/**', rows: 3 }
+            },
+            {
+                name: 'Vault scan: match timeout',
+                desc: 'Milliseconds a batch of files may spend matching before the worker is killed. A pattern that backtracks cannot be interrupted any other way.',
+                control: { type: 'slider', key: 'vaultMatchTimeoutMs', min: 500, max: 10000, step: 500 }
+            },
+            {
+                name: 'Vault replace: warn above',
+                desc: 'Show a stronger warning before replacing in more files than this. Writing measured about 2.7ms per file, so a few thousand files is several seconds that cannot be interrupted.',
+                control: { type: 'slider', key: 'vaultApplyWarnFiles', min: 100, max: 5000, step: 100 }
+            },
+            {
                 name: 'Import from regex-pipeline',
                 desc: `Reads ruleset files from ${this.app.vault.configDir}/regex-rulesets/`,
                 render: (setting: Setting) => {
@@ -148,6 +163,12 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
                 return this.plugin.settings.defaultFlags;
             case 'defaultSelectionOnly':
                 return this.plugin.settings.defaultSelectionOnly;
+            case 'vaultExcludeGlobs':
+                return this.plugin.settings.vaultExcludeGlobs;
+            case 'vaultMatchTimeoutMs':
+                return this.plugin.settings.vaultMatchTimeoutMs;
+            case 'vaultApplyWarnFiles':
+                return this.plugin.settings.vaultApplyWarnFiles;
             case 'showPreview':
                 return this.plugin.settings.showPreview;
             case 'historyLimit':
@@ -182,6 +203,12 @@ export class RegexReplaceSettingTab extends PluginSettingTab {
             }
         } else if (key === 'defaultSelectionOnly' && typeof value === 'boolean') {
             settings.defaultSelectionOnly = value;
+        } else if (key === 'vaultExcludeGlobs' && typeof value === 'string') {
+            settings.vaultExcludeGlobs = value;
+        } else if (key === 'vaultMatchTimeoutMs' && typeof value === 'number') {
+            settings.vaultMatchTimeoutMs = value;
+        } else if (key === 'vaultApplyWarnFiles' && typeof value === 'number') {
+            settings.vaultApplyWarnFiles = value;
         } else if (key === 'defaultFlags' && typeof value === 'string') {
             // Silently drop anything that is not a supported flag.
             settings.defaultFlags = value.replace(/[^gim]/g, '');
