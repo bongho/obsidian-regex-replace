@@ -173,6 +173,16 @@ function isExcluded(path: string, patterns: string[]): boolean {
 	});
 }
 
+// hashText (copied from src/types.ts for testing)
+function hashText(text: string): number {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		hash ^= text.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return hash >>> 0;
+}
+
 // computePreviewWindow (copied from main.ts for testing)
 function computePreviewWindow(
 	textLength: number,
@@ -571,6 +581,31 @@ test('Dots in a pattern are literal, not any-character', () => {
 
 test('Blank lines never exclude anything', () => {
 	assertEqual(isExcluded('note.md', ['', '   ']), false);
+});
+
+// --- Receipt Fingerprint ---
+console.log('\n--- Receipt Fingerprint ---');
+
+test('Same text hashes the same, different text does not', () => {
+	assertEqual(hashText('# Heading\n\nbody'), hashText('# Heading\n\nbody'));
+	assertTrue(hashText('a') !== hashText('b'));
+});
+
+test('A one-character edit changes the hash', () => {
+	// This is the whole job: undo must refuse a file that moved since the write.
+	assertTrue(hashText('note text') !== hashText('note texts'));
+	assertTrue(hashText('note text') !== hashText('note Text'));
+});
+
+test('Empty text hashes to the FNV offset basis', () => {
+	assertEqual(hashText(''), 0x811c9dc5);
+});
+
+test('Hash stays inside unsigned 32-bit range', () => {
+	for (const s of ['', 'a', '한글 노트', 'x'.repeat(5000)]) {
+		const h = hashText(s);
+		assertTrue(h >= 0 && h <= 0xffffffff && Number.isInteger(h));
+	}
 });
 
 // ============================================================================

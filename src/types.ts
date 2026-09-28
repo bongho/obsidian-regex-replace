@@ -5,6 +5,7 @@ export interface RegexReplaceSettings {
 	defaultSelectionOnly: boolean;
 	vaultExcludeGlobs: string;
 	vaultMatchTimeoutMs: number;
+	lastVaultReplace: ApplyReceipt | null;
 	recentPatterns: PatternHistory[];
 	ruleSets: RuleSet[];
 }
@@ -63,6 +64,52 @@ export function resolveTargetText(
 	return selection || null;
 }
 
+// One file's scan result. Selection is per file, not per match: rendering all
+// 48,020 matches of a wide pattern measured 8.7s, and a checkbox cannot be
+// ticked on a row that was never drawn.
+export interface VaultHit {
+	path: string;
+	matchCount: number;
+	matches: VaultMatchInfo[];
+	selected: boolean;
+	// Taken at scan time so apply can tell whether the file moved under us.
+	mtime: number;
+}
+
+export interface VaultMatchInfo {
+	index: number;
+	length: number;
+	text: string;
+}
+
+// The record an undo runs from. `before` is the file as it was immediately
+// before the write, `afterHash` fingerprints what we wrote, so undo can refuse
+// a file that changed again afterwards without storing a second full copy.
+export interface ApplyReceipt {
+	startedAt: number;
+	pattern: string;
+	flags: string;
+	replacement: string;
+	files: ReceiptEntry[];
+}
+
+export interface ReceiptEntry {
+	path: string;
+	before: string;
+	afterHash: number;
+	matchCount: number;
+}
+
+// FNV-1a. Not cryptographic — it only has to notice that a file changed.
+export function hashText(text: string): number {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		hash ^= text.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return hash >>> 0;
+}
+
 // One stage of a pipeline preview: the text before/after this rule ran.
 export interface PipelineStep {
 	stepIndex: number;
@@ -94,6 +141,7 @@ export const DEFAULT_SETTINGS: RegexReplaceSettings = {
 	defaultSelectionOnly: false,
 	vaultExcludeGlobs: '',
 	vaultMatchTimeoutMs: 2000,
+	lastVaultReplace: null,
 	recentPatterns: [],
 	ruleSets: []
 };

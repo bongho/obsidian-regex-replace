@@ -1,14 +1,9 @@
+import { VaultMatchInfo } from './types';
 import { MATCH_WORKER_SOURCE } from './match-worker';
-
-export interface VaultMatch {
-	index: number;
-	length: number;
-	text: string;
-}
 
 export interface FileMatches {
 	path: string;
-	matches: VaultMatch[];
+	matches: VaultMatchInfo[];
 }
 
 export interface MatchPayload {
@@ -17,32 +12,23 @@ export interface MatchPayload {
 	offset: number;
 }
 
-export interface MatchRun {
-	results: FileMatches[];
-	matchMs: number;
+// A live worker. `run` matches one batch; the caller decides how batches are
+// produced, which is what lets the scan interleave reading and matching instead
+// of reading the whole vault first.
+export interface Matcher {
+	run(files: MatchPayload[]): Promise<FileMatches[]>;
+	dispose(): void;
 }
 
-// What the worker posts back. `e.data` is `any`, so this is the one place the
-// shape is asserted; everything downstream is typed.
 type WorkerMessage =
 	| { type: 'ready' }
 	| { type: 'error'; message: string }
 	| { type: 'batchDone'; results: FileMatches[] };
 
-// Files per postMessage. Small enough that the watchdog blames a narrow set of
-// files when a pattern runs away, large enough to keep the message count down.
-const BATCH_SIZE = 50;
-
-// Runs the pattern over every payload in a worker, killing it if a batch stops
-// reporting. Rejects rather than returning partial results: a half-scanned
-// vault would make the match counts on screen a lie.
-export function runVaultMatch(
-	payloads: MatchPayload[],
-	pattern: string,
-	flags: string,
-	timeoutMs: number,
-	onProgress: (done: number, total: number) => void
-): Promise<MatchRun> {
+// Creates the worker and completes its handshake. Rejects rather than resolving
+// a half-working matcher: a regex that backtracks cannot be interrupted on the
+// thread running it, so a caller without a live worker has no safe way to match.
+export function createMatcher(pattern: string, flags: string, timeoutMs: number): Promise<Matcher> {
 	return new Promise((resolve, reject) => {
 		let worker: Worker;
 		let url: string;
@@ -55,66 +41,70 @@ export function runVaultMatch(
 			return;
 		}
 
-		const results: FileMatches[] = [];
-		const started = performance.now();
-		let cursor = 0;
+		let settle: ((msg: WorkerMessage) => void) | null = null;
+		let fail: ((error: Error) => void) | null = null;
 		let watchdog = 0;
+		let disposed = false;
 
-		const finish = (settle: () => void): void => {
+		const dispose = (): void => {
+			if (disposed) return;
+			disposed = true;
 			window.clearTimeout(watchdog);
 			worker.terminate();
 			URL.revokeObjectURL(url);
-			settle();
 		};
 
-		const sendNext = (): void => {
-			if (cursor >= payloads.length) {
-				const matchMs = performance.now() - started;
-				finish(() => resolve({ results, matchMs }));
-				return;
-			}
-			const batch = payloads.slice(cursor, cursor + BATCH_SIZE);
-			cursor += batch.length;
+		const arm = (message: string): void => {
 			watchdog = window.setTimeout(() => {
-				finish(() => reject(new Error(
-					`Matching stopped after ${timeoutMs}ms at "${batch[0].path}". ` +
-					'The pattern is too slow to run across the vault.'
-				)));
+				const onFail = fail;
+				dispose();
+				onFail?.(new Error(message));
 			}, timeoutMs);
-			worker.postMessage({ type: 'batch', files: batch });
 		};
 
 		worker.onmessage = (e: MessageEvent) => {
 			window.clearTimeout(watchdog);
 			const msg = e.data as WorkerMessage;
 			if (msg.type === 'error') {
-				finish(() => reject(new Error(msg.message)));
+				const onFail = fail;
+				dispose();
+				onFail?.(new Error(msg.message));
 				return;
 			}
-			if (msg.type === 'ready') {
-				sendNext();
-				return;
-			}
-			if (msg.type === 'batchDone') {
-				results.push(...msg.results);
-				onProgress(cursor, payloads.length);
-				sendNext();
-			}
+			settle?.(msg);
 		};
 
 		worker.onerror = (e: ErrorEvent) => {
-			finish(() => reject(new Error(e.message || 'The matching worker failed')));
+			const onFail = fail;
+			dispose();
+			onFail?.(new Error(e.message || 'The matching worker failed'));
 		};
 
-		// The handshake gets a watchdog of its own. A worker that is constructed
-		// but never runs — a blocked blob: script, for one — would otherwise
-		// leave this promise pending forever, which reads as a frozen dialog
-		// rather than a refusal.
-		watchdog = window.setTimeout(() => {
-			finish(() => reject(new Error(
-				'The matching worker did not start. Vault scanning is not available here.'
-			)));
-		}, timeoutMs);
+		// The handshake needs its own watchdog. A worker that is constructed but
+		// never runs — a blocked blob: script, for one — would otherwise leave
+		// this pending forever, which reads as a frozen dialog, not a refusal.
+		settle = () => {
+			resolve({
+				run: (files) => new Promise<FileMatches[]>((res, rej) => {
+					if (disposed) {
+						rej(new Error('The matching worker was stopped'));
+						return;
+					}
+					settle = (msg) => {
+						res(msg.type === 'batchDone' ? msg.results : []);
+					};
+					fail = rej;
+					arm(
+						`Matching stopped after ${timeoutMs}ms at "${files[0]?.path ?? '?'}". ` +
+						'The pattern is too slow to run across the vault.'
+					);
+					worker.postMessage({ type: 'batch', files });
+				}),
+				dispose
+			});
+		};
+		fail = reject;
+		arm('The matching worker did not start. Vault scanning is not available here.');
 		worker.postMessage({ type: 'init', pattern, flags });
 	});
 }

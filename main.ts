@@ -2,6 +2,7 @@ import { Editor, MarkdownView, Plugin, Notice } from 'obsidian';
 import {
 	RegexReplaceSettings,
 	PatternHistory,
+	ApplyReceipt,
 	DEFAULT_SETTINGS,
 	NO_SELECTION_NOTICE,
 	isSelectionOnly
@@ -11,6 +12,7 @@ import { PipelineModal } from './src/pipeline-modal';
 import { VaultReplaceModal } from './src/vault-replace-modal';
 import { RegexReplaceSettingTab } from './src/settings-tab';
 import { RegexEngine } from './src/engine';
+import { undoVaultReplace } from './src/vault-apply';
 
 export default class RegexReplacePlugin extends Plugin {
 	settings: RegexReplaceSettings;
@@ -48,6 +50,12 @@ export default class RegexReplacePlugin extends Plugin {
 			callback: () => {
 				new VaultReplaceModal(this.app, this).open();
 			}
+		});
+
+		this.addCommand({
+			id: 'undo-last-vault-replace',
+			name: 'Undo last vault replace',
+			callback: () => { void this.undoLastVaultReplace(); }
 		});
 
 		this.registerDynamicRuleSetCommands();
@@ -106,6 +114,30 @@ export default class RegexReplacePlugin extends Plugin {
 		} else {
 			new Notice(`Applied ruleset "${ruleset.name}" (${ruleset.rules.length} rules)`);
 		}
+	}
+
+	// The receipt is the only thing an undo can run from, so it is written
+	// before the first file is, and cleared once it has been used.
+	async saveVaultReceipt(receipt: ApplyReceipt): Promise<void> {
+		this.settings.lastVaultReplace = receipt;
+		await this.saveSettings();
+	}
+
+	private async undoLastVaultReplace(): Promise<void> {
+		const receipt = this.settings.lastVaultReplace;
+		if (!receipt) {
+			new Notice('No vault replace to undo');
+			return;
+		}
+
+		const outcome = await undoVaultReplace(this.app, receipt);
+		this.settings.lastVaultReplace = null;
+		await this.saveSettings();
+
+		const parts = [`Restored ${outcome.restored} file(s)`];
+		if (outcome.skipped.length > 0) parts.push(`${outcome.skipped.length} skipped`);
+		if (outcome.failed.length > 0) parts.push(`${outcome.failed.length} failed`);
+		new Notice(parts.join(', '));
 	}
 
 	async loadSettings(): Promise<void> {
