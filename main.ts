@@ -8,6 +8,7 @@ import {
 } from './src/types';
 import { ReplaceModal } from './src/replace-modal';
 import { PipelineModal } from './src/pipeline-modal';
+import { VaultReplaceModal } from './src/vault-replace-modal';
 import { RegexReplaceSettingTab } from './src/settings-tab';
 import { RegexEngine } from './src/engine';
 
@@ -38,6 +39,14 @@ export default class RegexReplacePlugin extends Plugin {
 			name: 'Apply ruleset (pipeline)',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				new PipelineModal(this.app, this, editor).open();
+			}
+		});
+
+		this.addCommand({
+			id: 'replace-in-vault',
+			name: 'Replace in vault',
+			callback: () => {
+				new VaultReplaceModal(this.app, this).open();
 			}
 		});
 

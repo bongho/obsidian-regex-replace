@@ -3,6 +3,8 @@ export interface RegexReplaceSettings {
 	historyLimit: number;
 	showPreview: boolean;
 	defaultSelectionOnly: boolean;
+	vaultExcludeGlobs: string;
+	vaultMatchTimeoutMs: number;
 	recentPatterns: PatternHistory[];
 	ruleSets: RuleSet[];
 }
@@ -90,6 +92,8 @@ export const DEFAULT_SETTINGS: RegexReplaceSettings = {
 	historyLimit: 10,
 	showPreview: true,
 	defaultSelectionOnly: false,
+	vaultExcludeGlobs: '',
+	vaultMatchTimeoutMs: 2000,
 	recentPatterns: [],
 	ruleSets: []
 };

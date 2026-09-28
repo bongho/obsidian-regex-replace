@@ -136,6 +136,43 @@ function resolveTargetText(
 	return selection || null;
 }
 
+// globToRegExp / isExcluded (copied from src/vault-scan.ts for testing)
+function globToRegExp(pattern: string): RegExp {
+	let out = '';
+	for (let i = 0; i < pattern.length; i++) {
+		const c = pattern[i];
+		if (c === '*' && pattern[i + 1] === '*') {
+			if (pattern[i + 2] === '/') {
+				out += '(?:[^/]+/)*';
+				i += 2;
+			} else {
+				out += '.*';
+				i += 1;
+			}
+		} else if (c === '*') {
+			out += '[^/]*';
+		} else if (c === '?') {
+			out += '[^/]';
+		} else {
+			out += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		}
+	}
+	return new RegExp(`^${out}$`);
+}
+
+const GLOB_CHARS = /[*?]/;
+
+function isExcluded(path: string, patterns: string[]): boolean {
+	return patterns.some(raw => {
+		const pattern = raw.trim().replace(/\/+$/, '');
+		if (!pattern) return false;
+		if (!GLOB_CHARS.test(pattern)) {
+			return path === pattern || path.startsWith(`${pattern}/`);
+		}
+		return globToRegExp(pattern).test(path);
+	});
+}
+
 // computePreviewWindow (copied from main.ts for testing)
 function computePreviewWindow(
 	textLength: number,
@@ -501,6 +538,39 @@ test('Selection-only with no selection refuses instead of widening', () => {
 test('Whole-note mode ignores the selection', () => {
 	assertEqual(resolveTargetText(false, 'picked', 'whole note'), 'whole note');
 	assertEqual(resolveTargetText(false, '', 'whole note'), 'whole note');
+});
+
+// --- Vault Scan Excludes ---
+console.log('\n--- Vault Scan Excludes ---');
+
+test('A bare folder name covers everything beneath it', () => {
+	assertEqual(isExcluded('Archive/2020/note.md', ['Archive']), true);
+	assertEqual(isExcluded('Archived/note.md', ['Archive']), false);
+});
+
+test('Single star stays inside one path segment', () => {
+	assertEqual(isExcluded('Templates/daily.md', ['Templates/*']), true);
+	assertEqual(isExcluded('Templates/work/daily.md', ['Templates/*']), false);
+});
+
+test('Double star crosses segments and allows none', () => {
+	assertEqual(isExcluded('Templates/work/daily.md', ['Templates/**']), true);
+	assertEqual(isExcluded('a/b/c.md', ['a/**/c.md']), true);
+	assertEqual(isExcluded('a/c.md', ['a/**/c.md']), true);
+});
+
+test('Extension globs match anywhere the pattern says', () => {
+	assertEqual(isExcluded('draw.excalidraw.md', ['*.excalidraw.md']), true);
+	assertEqual(isExcluded('sub/draw.excalidraw.md', ['*.excalidraw.md']), false);
+	assertEqual(isExcluded('sub/draw.excalidraw.md', ['**/*.excalidraw.md']), true);
+});
+
+test('Dots in a pattern are literal, not any-character', () => {
+	assertEqual(isExcluded('axmd/note.md', ['a.md']), false);
+});
+
+test('Blank lines never exclude anything', () => {
+	assertEqual(isExcluded('note.md', ['', '   ']), false);
 });
 
 // ============================================================================

@@ -232,3 +232,36 @@
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 }
+
+/* Vault scan (measurement prototype) */
+.regex-replace-vault-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-top: 0;
+}
+
+.regex-replace-vault-metrics {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin: 8px 0;
+}
+
+.regex-replace-vault-results {
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.regex-replace-vault-file-header {
+	cursor: pointer;
+	padding: 2px 0;
+}
+
+.regex-replace-vault-file-body {
+	display: none;
+	padding-left: 20px;
+}
+
+.regex-replace-vault-file.is-expanded .regex-replace-vault-file-body {
+	display: block;
+}
