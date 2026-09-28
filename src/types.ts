@@ -32,11 +32,12 @@ export interface RuleSet {
 	selectionOnly?: boolean;
 }
 
-// Shown instead of running when a selection-only ruleset is triggered with an
-// empty selection. Refusing beats widening to the whole note: the point of the
-// flag is that the rest of the note is never touched.
+// Shown instead of running when a selection-only run is triggered with an empty
+// selection. Refusing beats widening to the whole note: the point of the flag is
+// that the rest of the note is never touched. Worded without "ruleset" because
+// the find/replace dialog shows this too, and it has no ruleset.
 export const NO_SELECTION_NOTICE =
-	'This ruleset applies to the selection only — select some text first.';
+	'This runs on the selection only — select some text first.';
 
 // Whether a ruleset runs on the selection instead of the whole note. A
 // function so the "unset follows the global default" fallback has one home.
