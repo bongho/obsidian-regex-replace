@@ -78,3 +78,14 @@ credential helper follows whichever account `gh` has active — so `git push`,
 `gh pr merge`, and `gh release create` all fail with 403 until
 `gh auth switch -u bongho`. Check `gh auth status` before pushing rather than
 after the rejection, and switch back only once no git operations are left.
+
+**The community list entry cannot be updated, and does not need to be.**
+`obsidianmd/obsidian-releases` has issues and pull requests disabled at the repo
+level — even an unauthenticated read of its `/pulls` API returns 404 — so there
+is no PR to open. Its `community-plugins.json` entry was copied from
+`manifest.json` when the plugin was admitted and has not tracked it since; ours
+still carries a description that predates 1.1.4. That entry's `name`, `author`
+and `description` feed **search** only. Opening a plugin's detail page pulls
+`manifest.json` and `README.md` live from this repo, so the description users
+actually read is the one in `manifest.json` — keep that current, and treat a
+stale list entry as lost search matches rather than lost visibility.
