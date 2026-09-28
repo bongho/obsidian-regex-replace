@@ -16,6 +16,7 @@ save a complete cleanup workflow for PDFs, AI-generated text, and Markdown.
 | Before/after preview | — | ✓ |
 | Match highlighting | — | ✓ |
 | Replace within a selection | — | ✓ |
+| Replace across the whole vault | — | ✓ |
 | Reusable multi-step cleanup pipelines | — | ✓ |
 | Import regex-pipeline rulesets | — | ✓ |
 
@@ -31,6 +32,7 @@ external services.
 - **Selection Mode**: Replace only within selected text
 - **Pattern History**: Save and reuse recent search patterns
 - **Pipeline Rulesets**: Save reusable multi-step rulesets and apply them in sequence, with a step-by-step preview — and import existing [regex-pipeline](https://github.com/No3371/obsidian-regex-pipeline) rulesets
+- **Vault-wide Replace**: Replace across every note, or one folder — review the matches, pick the files, and undo the whole run afterwards (desktop only for now)
 - **Selection-only Rulesets**: Mark a ruleset as selection-only and it stays that way — hotkeys included — instead of resetting every time the dialog opens
 - **Dark/Light Theme**: Optimized for both Obsidian themes
 
@@ -197,6 +199,48 @@ rulesets**, then preview it with **Apply ruleset (pipeline)**.
 " {2,}"g->" "
 ```
 
+## Replace in Vault
+
+Desktop only for now — see below for why.
+
+Run **Replace in vault** from the command palette. Enter a pattern, flags, and a
+replacement, optionally limit it to a folder, then **Scan vault**.
+
+The scan reads and matches in batches, so the progress count moves as it goes and
+you can cancel partway. When it finishes you get one row per file with a hit and
+its match count, all ticked. Untick the files you don't want; click a row to see
+that file's matches. **Apply** asks once more, naming how many files and roughly
+how long the write will take, and only replaces on the second click.
+
+### Undoing
+
+**Undo last vault replace** puts every file back. It keeps the last run only.
+
+A file you edited *after* the replace is skipped rather than reverted, so an undo
+never overwrites work you did in between. The same check runs during apply: a
+file that changed between the scan and the write is skipped and reported.
+
+### Options
+
+- **Skip frontmatter** leaves the `---` block alone. Read from Obsidian's own
+  metadata, so a horizontal rule in the body is not mistaken for frontmatter.
+- **Excluded paths** (settings) is a glob list — `Archive`, `Templates/**`,
+  `**/*.excalidraw.md`. A bare folder name covers everything under it. Hidden
+  folders are already skipped. This is separate from Obsidian's own
+  excluded-files setting, which plugins cannot read.
+- **Match timeout** (settings) is how long a batch may run before the worker is
+  killed. A pattern that backtracks catastrophically — `(\w+\s?)+$` and friends —
+  cannot be interrupted on the thread running it, so matching happens in a worker
+  the main thread can terminate. Raise the timeout for a big vault, not for a
+  slow pattern.
+
+### Why desktop only
+
+The worker is the only thing standing between a backtracking pattern and a
+frozen window, and that path has only been exercised on desktop. Until it is
+confirmed on a real mobile device, the two vault commands are not registered
+there. The rest of the plugin works on mobile as before.
+
 ## Settings
 
 Access via Settings → Regex Replace:
@@ -208,6 +252,9 @@ Access via Settings → Regex Replace:
 | History Limit | Max saved patterns | `10` |
 | Pipeline rulesets | Add/edit/delete/import reusable rulesets | — |
 | Apply to selection only by default | Seeds the flag on new and imported rulesets | `false` |
+| Vault scan: excluded paths | Glob list of paths to skip when scanning the vault | — |
+| Vault scan: match timeout | Milliseconds a batch may match before the worker is killed | `2000` |
+| Vault replace: warn above | File count past which the confirm step warns | `1000` |
 
 ## Development
 

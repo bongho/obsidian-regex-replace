@@ -44,6 +44,17 @@ proves the copy correct, not the shipped code, and nothing enforces that the two
 stay in step. It also has no imports at all, which is what lets `ts-node` run it
 under `"module": "ESNext"` without a loader; adding one would break `npm test`.
 
+**Vault replace is desktop-only, and that is a gap, not a design.** The whole
+protection against a runaway pattern is a worker the main thread can terminate —
+a backtracking regex cannot be interrupted on the thread running it. That path
+has only ever run on desktop. Worker construction failing is handled (verified by
+stubbing `Worker`: both a throwing constructor and one that never answers settle
+with a notice), but a mobile WebView where the worker *does* start and the
+watchdog behaves differently is untested, and the failure mode there is a hung
+app. So `main.ts` registers the two vault commands behind `!Platform.isMobile`.
+`isDesktopOnly` stays `false` so everything else keeps working on mobile. Lift
+the guard once the worker is confirmed on a real device.
+
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required
 `tsconfig.json` `target` to move to `ES2018`, since TypeScript 5 checks regex

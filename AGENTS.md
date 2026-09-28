@@ -35,10 +35,12 @@ npm run build
 
 ## Linting
 
-- To use eslint install eslint from terminal: `npm install -g eslint`
-- To use eslint to analyze this project use this command: `eslint main.ts`
-- eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder: `eslint ./src/`
+- Run `npm run lint`. It uses this repo's `eslint.config.mjs` (flat config,
+  `eslint-plugin-obsidianmd`) — the same ruleset the Obsidian plugin review runs.
+- Do **not** install a global eslint and run `eslint main.ts`. That skips the
+  `obsidianmd/*` rules entirely, which is the whole reason linting happens here:
+  the review reports those findings against a published release, and a failed
+  release check cannot be re-run. See `CONTRIBUTING.md` → Linting.
 
 ## File & folder conventions
 
@@ -80,6 +82,12 @@ npm run build
 
 ## Testing
 
+- Run `npm test` before finishing a change. It runs `test.ts`, a hand-rolled
+  harness (no Vitest/Jest), and CI runs it too on Node 20/22/24.
+- Know its limit: `test.ts` **copies** the functions it tests out of `src/`
+  rather than importing them, so a green run proves the copy correct, not the
+  shipped code. Change a copied function in `src/` and the test keeps passing
+  until you update the copy. See `CONTRIBUTING.md` → Known gaps.
 - Manual install for testing: copy `main.js`, `manifest.json`, `styles.css` (if any) to:
   ```
   <Vault>/.obsidian/plugins/<plugin-id>/
