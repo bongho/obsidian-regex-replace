@@ -32,14 +32,17 @@ Each of these is missing on purpose, not by oversight. The reasoning is here so
 it doesn't have to be re-derived — or "fixed" in a way that reintroduces the
 problem it was avoiding.
 
-**No test runner.** No Vitest/Jest setup and no `test` script, so CI's
-`test --if-present` step is inert on every push. `test.js` is a stale duplicate
-— treat it as a leftover. `test.ts` is not: it is maintained by hand and gains
-cases alongside feature work (the "Selection-only Resolution" block came in with
-#9). It copies the logic it tests out of `src/` rather than importing it, so a
-green run proves the copy correct, not the shipped code. Run it with
-`npx ts-node --transpile-only test.ts` before cutting a release — nothing else
-will.
+**No test framework.** No Vitest/Jest — `test.ts` is a hand-rolled harness with
+its own `test()` and `assertEqual()`. It does now run: `npm test` is defined and
+CI's `test --if-present` step executes it, so the suite is no longer something
+only a human remembers to run. `test.js` is a stale duplicate; treat it as a
+leftover.
+
+The thing to know about `test.ts` is that it **copies** the logic it tests out
+of `src/` instead of importing it — seven functions as of 1.2.1. A green run
+proves the copy correct, not the shipped code, and nothing enforces that the two
+stay in step. It also has no imports at all, which is what lets `ts-node` run it
+under `"module": "ESNext"` without a loader; adding one would break `npm test`.
 
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required
