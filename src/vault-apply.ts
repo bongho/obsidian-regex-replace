@@ -111,6 +111,9 @@ export async function applyVaultReplace(app: App, req: ApplyRequest): Promise<Ap
 	const snapshotMs = performance.now() - snapshotStart;
 
 	const writeStart = performance.now();
+	// Looked up per write rather than scanned for: the linear search this
+	// replaces ran inside a loop that already takes 15s at vault scale.
+	const countByPath = new Map(entries.map(entry => [entry.path, entry.matchCount]));
 	let changed = 0;
 	let matches = 0;
 	let done = 0;
@@ -136,7 +139,7 @@ export async function applyVaultReplace(app: App, req: ApplyRequest): Promise<Ap
 				continue;
 			}
 			changed++;
-			matches += entries.find(e => e.path === write.file.path)?.matchCount ?? 0;
+			matches += countByPath.get(write.file.path) ?? 0;
 		} catch (e) {
 			failed.push({ path: write.file.path, error: String(e) });
 		}

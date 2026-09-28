@@ -2,7 +2,7 @@ import { App, Modal, Notice, TFile } from 'obsidian';
 import { collectFiles, frontmatterOffset, parseExcludeGlobs } from './vault-scan';
 import { createMatcher, MatchPayload } from './vault-match';
 import { applyVaultReplace } from './vault-apply';
-import { ApplyReceipt, VaultHit } from './types';
+import { ApplyReceipt, VaultHit, withGlobalFlag } from './types';
 import type RegexReplacePlugin from '../main';
 
 // Files read and matched per round trip. Small enough that progress moves and
@@ -124,6 +124,9 @@ export class VaultReplaceModal extends Modal {
 		const files = collectFiles(this.app, this.folderInput.value, excludes);
 		const enumerateMs = performance.now() - enumStart;
 
+		// Written back into the field rather than applied silently: the user
+		// should see the flags the run actually used.
+		this.flagsInput.value = withGlobalFlag(this.flagsInput.value);
 		const matcher = await createMatcher(
 			pattern, this.flagsInput.value, this.plugin.settings.vaultMatchTimeoutMs
 		);
@@ -258,7 +261,7 @@ export class VaultReplaceModal extends Modal {
 			const outcome = await applyVaultReplace(this.app, {
 				hits: chosen,
 				pattern: this.patternInput.value,
-				flags: this.flagsInput.value,
+				flags: withGlobalFlag(this.flagsInput.value),
 				replacement: this.replacementInput.value,
 				skipFrontmatter: this.frontmatterCheckbox.checked,
 				saveReceipt: (receipt: ApplyReceipt) => this.plugin.saveVaultReceipt(receipt),

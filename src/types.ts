@@ -113,6 +113,14 @@ export interface ReceiptEdit {
 	after: string;
 }
 
+// A vault run counts matches with `g` forced on (both the worker and
+// collectMatches do), but String.replace honours the flags as typed — so
+// without `g` the scan reports every match while the apply changes only the
+// first. Normalising once keeps the two halves talking about the same thing.
+export function withGlobalFlag(flags: string): string {
+	return flags.includes('g') ? flags : `${flags}g`;
+}
+
 // Replays edits forward onto the original text. Used at apply time to prove the
 // edit list reproduces what will be written — if it does not, the entry falls
 // back to storing the whole file.

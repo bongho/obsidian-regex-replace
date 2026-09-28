@@ -211,6 +211,11 @@ function reverseEdits(after: string, edits: ReceiptEdit[]): string {
 	return out;
 }
 
+// withGlobalFlag (copied from src/types.ts for testing)
+function withGlobalFlag(flags: string): string {
+	return flags.includes('g') ? flags : `${flags}g`;
+}
+
 // computePreviewWindow (copied from main.ts for testing)
 function computePreviewWindow(
 	textLength: number,
@@ -697,6 +702,23 @@ test('No edits leaves the text alone in both directions', () => {
 	const r = roundTrip('unchanged', []);
 	assertEqual(r.after, 'unchanged');
 	assertEqual(r.back, 'unchanged');
+});
+
+// --- Vault Flag Normalisation ---
+console.log('\n--- Vault Flag Normalisation ---');
+
+test('Flags without g gain it', () => {
+	// The bug this guards: counting forces g, String.replace does not, so an
+	// "i"-only run reported every match and changed only the first.
+	assertEqual(withGlobalFlag('i'), 'ig');
+	assertEqual(withGlobalFlag(''), 'g');
+	assertEqual(withGlobalFlag('im'), 'img');
+});
+
+test('Flags already carrying g are untouched', () => {
+	assertEqual(withGlobalFlag('g'), 'g');
+	assertEqual(withGlobalFlag('gm'), 'gm');
+	assertEqual(withGlobalFlag('gi'), 'gi');
 });
 
 // ============================================================================
