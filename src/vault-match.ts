@@ -106,6 +106,15 @@ export function runVaultMatch(
 			finish(() => reject(new Error(e.message || 'The matching worker failed')));
 		};
 
+		// The handshake gets a watchdog of its own. A worker that is constructed
+		// but never runs — a blocked blob: script, for one — would otherwise
+		// leave this promise pending forever, which reads as a frozen dialog
+		// rather than a refusal.
+		watchdog = window.setTimeout(() => {
+			finish(() => reject(new Error(
+				'The matching worker did not start. Vault scanning is not available here.'
+			)));
+		}, timeoutMs);
 		worker.postMessage({ type: 'init', pattern, flags });
 	});
 }
