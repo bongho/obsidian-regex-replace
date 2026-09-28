@@ -230,6 +230,10 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### 1.2.1
+- Describe vault-wide replace in the plugin's own description — the directory and the plugin's detail page were still advertising the 1.1.x feature set ([#16](https://github.com/bongho/obsidian-regex-replace/pull/16))
+- Run the test suite in CI. The workflow had called `npm test` since it was added with no script behind it, so the 68 cases had only ever run by hand ([#17](https://github.com/bongho/obsidian-regex-replace/pull/17))
+
 ### 1.2.0
 - **Replace across the whole vault or a folder** with the new "Replace in vault" command ([#15](https://github.com/bongho/obsidian-regex-replace/pull/15))
 - Scan streams as it reads, so progress is real and the run can be cancelled
