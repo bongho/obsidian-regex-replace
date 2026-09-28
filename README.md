@@ -277,6 +277,10 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### Unreleased
+- Register the vault commands on desktop only. The protection against a runaway pattern is a worker the main thread can terminate, and that path has never run on a mobile device — `isDesktopOnly` stays `false`, so the rest of the plugin is unaffected ([#18](https://github.com/bongho/obsidian-regex-replace/pull/18))
+- Document vault-wide replace in the README: usage, what undo restores, and the three vault settings
+
 ### 1.2.1
 - Describe vault-wide replace in the plugin's own description — the directory and the plugin's detail page were still advertising the 1.1.x feature set ([#16](https://github.com/bongho/obsidian-regex-replace/pull/16))
 - Run the test suite in CI. The workflow had called `npm test` since it was added with no script behind it, so the 68 cases had only ever run by hand ([#17](https://github.com/bongho/obsidian-regex-replace/pull/17))
