@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Platform, Plugin, Notice } from 'obsidian';
+import { Editor, MarkdownView, Plugin, Notice } from 'obsidian';
 import {
 	RegexReplaceSettings,
 	PatternHistory,
@@ -44,27 +44,19 @@ export default class RegexReplacePlugin extends Plugin {
 			}
 		});
 
-		// Desktop only for now. Vault replace's protection against a runaway
-		// pattern is a worker the main thread can terminate, and that path has
-		// only been exercised on desktop — if the watchdog behaves differently
-		// inside a mobile WebView, a backtracking regex hangs the app with no
-		// way out. isDesktopOnly stays false so the rest of the plugin keeps
-		// working on mobile; lift this once the worker is confirmed there.
-		if (!Platform.isMobile) {
-			this.addCommand({
-				id: 'replace-in-vault',
-				name: 'Replace in vault',
-				callback: () => {
-					new VaultReplaceModal(this.app, this).open();
-				}
-			});
+		this.addCommand({
+			id: 'replace-in-vault',
+			name: 'Replace in vault',
+			callback: () => {
+				new VaultReplaceModal(this.app, this).open();
+			}
+		});
 
-			this.addCommand({
-				id: 'undo-last-vault-replace',
-				name: 'Undo last vault replace',
-				callback: () => { void this.undoLastVaultReplace(); }
-			});
-		}
+		this.addCommand({
+			id: 'undo-last-vault-replace',
+			name: 'Undo last vault replace',
+			callback: () => { void this.undoLastVaultReplace(); }
+		});
 
 		this.registerDynamicRuleSetCommands();
 
