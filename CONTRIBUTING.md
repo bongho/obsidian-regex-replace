@@ -96,8 +96,8 @@ questions answered on the device itself:
 
 Answer 3 and 4 yes on a real device and the guard is one line to remove.
 
-Two of these have a desktop answer now, measured against an isolated instance
-running under `app.emulateMobile(true)`:
+Three of these have a desktop answer now, measured against an isolated
+instance running under `app.emulateMobile(true)`:
 
 - **The guard does what it claims.** With `app.isMobile` true,
   `regex-replace:replace-in-vault` and `:undo-last-vault-replace` are absent
@@ -109,12 +109,31 @@ running under `app.emulateMobile(true)`:
   there. Driving the same pattern through the modal, the watchdog fired at
   exactly 2000ms with "Matching stopped after 2000ms at ...", and the message
   lands in the metrics line rather than as a `Notice`.
+- **Suspending the page does not produce the asymmetric case.** Driving
+  `Page.setWebLifecycleState` to `frozen` mid-scan took the renderer from 93%
+  of a core to 0% — the worker stops with the timers, not despite them. A
+  250ms interval armed before the freeze had run 16 times going in and still
+  read 16 coming out. Thawing after ~25s of wall time, the watchdog fired
+  about 1.5s later: the 2000ms timer had 1500ms left when the freeze hit and
+  resumed with exactly that much to go. Note that `performance.now()` kept
+  advancing across the freeze while `setTimeout` did not, so elapsed time is
+  not what the watchdog is counting.
 
-Neither transfers to a mobile WebView on its own — same worker spec, different
-engine and different scheduler. What it does change is the shape of the
-remaining questions: 1, 2 and 4 now ask whether mobile *differs* from a
-known-good desktop path, not whether the path works at all. Question 3 is open
-on both, because nothing here backgrounded the app.
+None of this transfers to a mobile WebView on its own — same worker spec,
+different engine, different scheduler, and `frozen` is Chromium's lifecycle
+state rather than what iOS does to a backgrounded app. What it changes is the
+shape of the remaining work: all four questions now ask whether mobile
+*differs* from a desktop path that has been measured, not whether the path
+works at all.
+
+It also makes the feared failure less likely than it looked. The worry was a
+worker that keeps burning while the watchdog that would kill it is asleep. A
+worker is a thread inside the renderer process, so whatever suspends the page
+suspends it too, and the throttled-but-running case — a backgrounded tab
+clamping timers to 1s — still fires a 2000ms watchdog, just up to a second
+late. For the asymmetry to actually bite, a platform would have to keep worker
+threads scheduled while stopping the page's timers entirely. That is worth
+confirming on a device; it is no longer the default expectation.
 
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required
