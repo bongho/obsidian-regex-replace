@@ -35,14 +35,28 @@ problem it was avoiding.
 **No test framework.** No Vitest/Jest — `test.ts` is a hand-rolled harness with
 its own `test()` and `assertEqual()`. It does now run: `npm test` is defined and
 CI's `test --if-present` step executes it, so the suite is no longer something
-only a human remembers to run. `test.js` is a stale duplicate; treat it as a
-leftover.
+only a human remembers to run.
 
-The thing to know about `test.ts` is that it **copies** the logic it tests out
-of `src/` instead of importing it — seven functions as of 1.2.1. A green run
-proves the copy correct, not the shipped code, and nothing enforces that the two
-stay in step. It also has no imports at all, which is what lets `ts-node` run it
-under `"module": "ESNext"` without a loader; adding one would break `npm test`.
+`test.ts` still **copies** the logic it tests out of `src/` instead of importing
+it — 17 functions as of 1.2.2. It has no imports at all, which is what lets
+`ts-node` run it under `"module": "ESNext"` without a loader; adding one would
+break `npm test`, so the copying stays.
+
+What no longer stays is the silence around it. `npm test` now runs
+`check-test-copies.mjs` first, which parses both sides with the TypeScript AST
+and fails the run when a copy's body no longer matches its original. Copies are
+discovered rather than listed — any top-level function or class method in
+`test.ts` whose name also exists in `src/` or `main.ts` is compared — so adding
+one needs no change to the checker. Signatures are out of scope, since `test.ts`
+cannot name the types it would have to import; a renamed or reordered parameter
+that the body never reads is the one thing that still slips through.
+
+It was not a hypothetical gap. When the check was first run, `RegexEngine.preview`
+and `RegexEngine.execute` in `test.ts` were still the pre-`processReplacement`
+versions: the copy re-ran the regex on the matched substring, which is precisely
+the bug `collectMatches` was written to fix, and it never applied the `\n` / `\t`
+/ `\r` unescaping that the shipped code does. Both behaviours had no test at
+all. They have one each now.
 
 **Vault replace is desktop-only, and that is a gap, not a design.** The whole
 protection against a runaway pattern is a worker the main thread can terminate —
@@ -54,6 +68,33 @@ watchdog behaves differently is untested, and the failure mode there is a hung
 app. So `main.ts` registers the two vault commands behind `!Platform.isMobile`.
 `isDesktopOnly` stays `false` so everything else keeps working on mobile. Lift
 the guard once the worker is confirmed on a real device.
+
+Confirming it needs a build with the guard removed, side-loaded under a
+different plugin id so it cannot overwrite the installed copy, and four
+questions answered on the device itself:
+
+1. Does `new Worker(URL.createObjectURL(blob))` construct at all? A mobile
+   WebView may refuse a `blob:` worker outright. If it does, the handshake
+   watchdog already turns that into a notice, which is a pass, not a failure.
+2. Does the handshake complete, i.e. does `ready` come back? A worker that
+   constructs but never runs is exactly what that watchdog exists for.
+3. What happens when the app is backgrounded mid-scan? This is the question
+   that actually decides it, and it is less obvious than it looks. A
+   backgrounded `WKWebView` is documented to suspend JavaScript execution
+   outright, not merely throttle it, so the watchdog `setTimeout` does not
+   fire — but if the suspension covers the worker too, the runaway regex is
+   suspended along with it and nothing is actually hung. The pass condition is
+   therefore not "the watchdog fires on time" but "coming back to the
+   foreground resumes the scan and the watchdog still arrives". Check for the
+   asymmetric case specifically: the worker kept running while the timer did
+   not. Reports of backgrounded `WKWebView` continuing to execute JavaScript
+   from iOS 13.5.1 onward mean this is version-dependent, so it cannot be
+   settled by reading; it has to be run.
+4. Does `terminate()` stop a worker already inside a backtracking regex? Run
+   something like `(a+)+$` against a long line of `a`s and check that the app
+   stays responsive and the run ends in the notice rather than a spinner.
+
+Answer 3 and 4 yes on a real device and the guard is one line to remove.
 
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required

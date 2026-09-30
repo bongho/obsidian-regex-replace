@@ -33,42 +33,37 @@ class RegexEngine {
 	static compile(pattern: string, flags: string): RegExp | null {
 		try {
 			return new RegExp(pattern, flags);
-		} catch (e) {
+		} catch {
 			return null;
 		}
 	}
 
-	static preview(text: string, pattern: string, replacement: string, flags: string): ReplaceResult | { error: string } {
+	private static processReplacement(replacement: string): string {
+		return replacement
+			.replace(/\\n/g, '\n')
+			.replace(/\\t/g, '\t')
+			.replace(/\\r/g, '\r');
+	}
+
+	static preview(
+		text: string,
+		pattern: string,
+		replacement: string,
+		flags: string
+	): ReplaceResult | { error: string } {
 		const regex = this.compile(pattern, flags);
 		if (!regex) {
 			return { error: 'Invalid regular expression' };
 		}
 
 		try {
-			const replaced = text.replace(regex, replacement);
-			const matchInfos: MatchInfo[] = [];
-			const globalRegex = new RegExp(pattern, flags.includes('g') ? flags : flags + 'g');
-			let match;
-
-			while ((match = globalRegex.exec(text)) !== null) {
-				const matchedText = match[0];
-				const replacementText = matchedText.replace(new RegExp(pattern, flags.replace('g', '')), replacement);
-
-				matchInfos.push({
-					index: match.index,
-					length: matchedText.length,
-					match: matchedText,
-					replacement: replacementText
-				});
-
-				if (match.index === globalRegex.lastIndex) {
-					globalRegex.lastIndex++;
-				}
-			}
+			const processedReplacement = this.processReplacement(replacement);
+			const replaced = text.replace(regex, processedReplacement);
+			const matchInfos = this.collectMatches(text, pattern, processedReplacement, flags);
 
 			return {
 				original: text,
-				replaced: replaced,
+				replaced,
 				matchCount: matchInfos.length,
 				matches: matchInfos
 			};
@@ -77,20 +72,85 @@ class RegexEngine {
 		}
 	}
 
-	static execute(text: string, pattern: string, replacement: string, flags: string): string | { error: string } {
+	private static collectMatches(
+		text: string,
+		pattern: string,
+		replacement: string,
+		flags: string
+	): MatchInfo[] {
+		const matchInfos: MatchInfo[] = [];
+		const globalFlags = flags.includes('g') ? flags : flags + 'g';
+		const globalRegex = new RegExp(pattern, globalFlags);
+		let match;
+
+		while ((match = globalRegex.exec(text)) !== null) {
+			const matchedText = match[0];
+			// Compute replacement by substituting group references directly from
+			// the exec result, rather than re-running the regex on the matched
+			// substring. Re-running loses surrounding context, so lookbehind /
+			// lookahead assertions match at wrong positions and produce a
+			// misleading preview (the actual replacement via text.replace() is
+			// unaffected and always correct).
+			const replacementText = this.substituteGroups(matchedText, match, replacement);
+
+			matchInfos.push({
+				index: match.index,
+				length: matchedText.length,
+				match: matchedText,
+				replacement: replacementText
+			});
+
+			if (match.index === globalRegex.lastIndex) {
+				globalRegex.lastIndex++;
+			}
+		}
+
+		return matchInfos;
+	}
+
+	private static substituteGroups(
+		matchedText: string,
+		match: RegExpExecArray,
+		replacement: string
+	): string {
+		// Split on $$ first so literal dollar signs are never re-processed,
+		// avoiding both a sentinel character and no-control-regex violations.
+		return replacement
+			.split('$$')
+			.map(part =>
+				part
+					.replace(/\$&/g, matchedText)
+					.replace(/\$(\d+)/g, (_full: string, n: string): string => {
+						const idx = parseInt(n, 10);
+						return match[idx] ?? '';
+					})
+					.replace(/\$<([^>]+)>/g, (_full: string, name: string): string =>
+						match.groups?.[name] ?? ''
+					)
+			)
+			.join('$');
+	}
+
+	static execute(
+		text: string,
+		pattern: string,
+		replacement: string,
+		flags: string
+	): string | { error: string } {
 		const regex = this.compile(pattern, flags);
 		if (!regex) {
 			return { error: 'Invalid regular expression' };
 		}
 
 		try {
-			return text.replace(regex, replacement);
+			const processedReplacement = this.processReplacement(replacement);
+			return text.replace(regex, processedReplacement);
 		} catch (e) {
 			return { error: String(e) };
 		}
 	}
 
-	// Mirrors main.ts RegexEngine.executePipeline (copied for testing).
+	// Mirrors src/engine.ts RegexEngine.executePipeline (copied for testing).
 	static executePipeline(text: string, rules: PipelineRule[]): { result: string; warnings: string[] } {
 		let current = text;
 		const warnings: string[] = [];
@@ -106,7 +166,7 @@ class RegexEngine {
 	}
 }
 
-// Mirrors main.ts parsePipelineRuleset (copied for testing).
+// Mirrors src/engine.ts parsePipelineRuleset (copied for testing).
 const PIPELINE_DEFAULT_FLAGS = 'gm';
 function parsePipelineRuleset(content: string): PipelineRule[] {
 	const rules: PipelineRule[] = [];
@@ -142,6 +202,7 @@ function globToRegExp(pattern: string): RegExp {
 	for (let i = 0; i < pattern.length; i++) {
 		const c = pattern[i];
 		if (c === '*' && pattern[i + 1] === '*') {
+			// `**/` swallows its own separator, so `a/**/b` still matches `a/b`.
 			if (pattern[i + 2] === '/') {
 				out += '(?:[^/]+/)*';
 				i += 2;
@@ -216,7 +277,7 @@ function withGlobalFlag(flags: string): string {
 	return flags.includes('g') ? flags : `${flags}g`;
 }
 
-// computePreviewWindow (copied from main.ts for testing)
+// computePreviewWindow (copied from src/engine.ts for testing)
 function computePreviewWindow(
 	textLength: number,
 	firstMatchIndex: number,
@@ -290,6 +351,10 @@ test('Global replacement (multiple matches)', () => {
 test('Non-global replacement (first match only)', () => {
 	const result = RegexEngine.execute('cat cat cat', 'cat', 'dog', '');
 	assertEqual(result, 'dog cat cat');
+});
+
+test('Backslash escapes in the replacement become real characters', () => {
+	assertEqual(RegexEngine.execute('a,b', ',', '\\n', 'g'), 'a\nb');
 });
 
 test('Case insensitive replacement', () => {
@@ -370,6 +435,20 @@ test('Preview shows before/after correctly', () => {
 	if (!('error' in result)) {
 		assertEqual(result.original, 'hello world');
 		assertEqual(result.replaced, 'hello universe');
+	}
+});
+
+// Regression for the reason collectMatches substitutes groups from the exec
+// result instead of re-running the regex on the matched substring: the
+// substring has no surrounding context, so the assertion fails there and the
+// preview shows the match unchanged while the applied replacement differs.
+test('Preview replacement survives a lookahead assertion', () => {
+	const result = RegexEngine.preview('a1 b2', '\\d(?= b)', 'X', 'g');
+	assertTrue(!('error' in result));
+	if (!('error' in result)) {
+		assertEqual(result.matchCount, 1);
+		assertEqual(result.matches[0].replacement, 'X');
+		assertEqual(result.replaced, 'aX b2');
 	}
 });
 
