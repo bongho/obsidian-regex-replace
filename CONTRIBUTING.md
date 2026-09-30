@@ -146,8 +146,21 @@ own `handlePause`/`handleResume`, which nothing invokes. Capacitor's own
 lifecycle path agrees: `BridgeActivity.onPause`/`onStop` go to `Bridge`,
 which never mentions `pauseTimers`. Control for the method: `WebView.loadUrl`
 and `evaluateJavascript` come back with five callers each in the same pass,
-so a zero here is a real zero and not a broken parser. What this cannot see
-is a reflective call, which the Cordova bridge layer is fond of.
+so a zero here is a real zero and not a broken parser. A reflective call
+would need the method name as a string constant, and none of `pauseTimers`,
+`setPaused`, `handlePause` or `handleResume` is loaded by a `const-string`
+anywhere in either dex — while the control string
+`android.intent.action.VIEW` turns up at eight sites, and its being in plain
+text at all rules out string encryption hiding the others.
+
+Blink's own source closes the loop and explains both measurements above.
+`DedicatedWorker::ContextLifecycleStateChanged` switches on the frame's
+lifecycle state: `kFrozen` forwards a `Freeze` to the worker, which is why
+freezing the page took the renderer to 0%, while `kPaused` is commented
+"Do not do anything in this case. kPaused is only used for when the main
+thread is paused we shouldn't worry about pausing the worker thread". That
+comment is the asymmetry, stated by the engine. It is reachable through
+pausing, not through freezing — and backgrounding an app freezes.
 
 **iOS looks like the safer side**, despite being the different engine. Reports
 have `WKWebView` continuing to execute JavaScript for roughly 30s after
