@@ -32,7 +32,7 @@ external services.
 - **Selection Mode**: Replace only within selected text
 - **Pattern History**: Save and reuse recent search patterns
 - **Pipeline Rulesets**: Save reusable multi-step rulesets and apply them in sequence, with a step-by-step preview — and import existing [regex-pipeline](https://github.com/No3371/obsidian-regex-pipeline) rulesets
-- **Vault-wide Replace**: Replace across every note, or one folder — review the matches, pick the files, and undo the whole run afterwards (desktop only for now)
+- **Vault-wide Replace**: Replace across every note, or one folder — review the matches, pick the files, and undo the whole run afterwards
 - **Selection-only Rulesets**: Mark a ruleset as selection-only and it stays that way — hotkeys included — instead of resetting every time the dialog opens
 - **Dark/Light Theme**: Optimized for both Obsidian themes
 
@@ -201,8 +201,6 @@ rulesets**, then preview it with **Apply ruleset (pipeline)**.
 
 ## Replace in Vault
 
-Desktop only for now — see below for why.
-
 Run **Replace in vault** from the command palette. Enter a pattern, flags, and a
 replacement, optionally limit it to a folder, then **Scan vault**.
 
@@ -234,12 +232,16 @@ file that changed between the scan and the write is skipped and reported.
   the main thread can terminate. Raise the timeout for a big vault, not for a
   slow pattern.
 
-### Why desktop only
+### On mobile
 
-The worker is the only thing standing between a backtracking pattern and a
-frozen window, and that path has only been exercised on desktop. Until it is
-confirmed on a real mobile device, the two vault commands are not registered
-there. The rest of the plugin works on mobile as before.
+The vault commands were desktop-only in 1.2.2 while the worker that guards
+against a runaway pattern went unverified anywhere but the desktop. They run
+everywhere as of 1.3.0. The short version of why: backgrounding an app freezes
+the page, and a frozen page freezes its workers too, so the pattern stops when
+the watchdog does rather than burning on while nothing can kill it.
+
+It is still the less-travelled path. If a scan ever seems to hang on a phone,
+lower **Match timeout** and report it.
 
 ## Settings
 
@@ -276,6 +278,10 @@ npx ts-node --transpile-only test.ts
 ```
 
 ## Changelog
+
+### 1.3.0
+- **Vault-wide replace runs on mobile.** 1.2.2 held it back because the worker that stops a runaway pattern had never been exercised outside the desktop; it has now been traced far enough to lift the guard
+- The test suite tests the shipped code. `test.ts` copies the functions it exercises out of `src/`, and two of the copies had fallen years behind — `preview` and `execute` were still the versions from before replacement unescaping and before the fix for lookaround in the match list. `npm test` now fails when a copy drifts ([#19](https://github.com/bongho/obsidian-regex-replace/pull/19))
 
 ### 1.2.2
 - Register the vault commands on desktop only. The protection against a runaway pattern is a worker the main thread can terminate, and that path has never run on a mobile device — `isDesktopOnly` stays `false`, so the rest of the plugin is unaffected ([#18](https://github.com/bongho/obsidian-regex-replace/pull/18))
