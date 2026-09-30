@@ -126,14 +126,33 @@ shape of the remaining work: all four questions now ask whether mobile
 *differs* from a desktop path that has been measured, not whether the path
 works at all.
 
-It also makes the feared failure less likely than it looked. The worry was a
-worker that keeps burning while the watchdog that would kill it is asleep. A
-worker is a thread inside the renderer process, so whatever suspends the page
-suspends it too, and the throttled-but-running case — a backgrounded tab
-clamping timers to 1s — still fires a 2000ms watchdog, just up to a second
-late. For the asymmetry to actually bite, a platform would have to keep worker
-threads scheduled while stopping the page's timers entirely. That is worth
-confirming on a device; it is no longer the default expectation.
+It also splits the remaining risk by engine, which saying "mobile" was hiding.
+The asymmetry needs a platform that keeps worker threads scheduled while
+stopping the page's timers outright. That is not a hypothetical API.
+
+**Android is the side to worry about**, despite running the same Chromium this
+was measured on. It exposes `WebView.pauseTimers()`, whose documented job is
+to stop JavaScript timers for every WebView in the process, and nothing found
+so far — the Android reference, the Chromium scheduler thread that reintroduced
+paused timers for WebView, the Blink web-workers page — says whether that pause
+reaches worker task queues. Workers run in the renderer process on their own
+thread, so "pauses the page's timers" and "pauses the worker" are separate
+claims. A host that calls `pauseTimers()` from `onStop` would produce the
+asymmetry exactly: watchdog asleep, worker still burning. Whether Obsidian
+calls it is not observable from outside the app.
+
+**iOS looks like the safer side**, despite being the different engine. Reports
+have `WKWebView` continuing to execute JavaScript for roughly 30s after
+backgrounding, until the WebKit `ProcessAssertion` expires — timers included,
+so the watchdog runs normally in that window — and after it the WebContent
+process is suspended, or killed outright under memory pressure, which takes
+the worker with it either way.
+
+So the device run worth doing is narrow, and it is an Android one: start a
+scan with a runaway pattern, background the app for a minute, come back, and
+check both whether the watchdog message is waiting and whether the device got
+warm while it was away. The second half is the actual measurement — the
+message can arrive late and still mean the worker ran the whole time.
 
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required
