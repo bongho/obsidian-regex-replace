@@ -78,10 +78,18 @@ questions answered on the device itself:
    watchdog already turns that into a notice, which is a pass, not a failure.
 2. Does the handshake complete, i.e. does `ready` come back? A worker that
    constructs but never runs is exactly what that watchdog exists for.
-3. Does the watchdog still fire when the app is backgrounded mid-scan? This is
-   the question that actually decides it. `window.setTimeout` is throttled or
-   suspended in a backgrounded mobile WebView, and that timeout is the entire
-   protection: if it never arrives, nothing calls `terminate()`.
+3. What happens when the app is backgrounded mid-scan? This is the question
+   that actually decides it, and it is less obvious than it looks. A
+   backgrounded `WKWebView` is documented to suspend JavaScript execution
+   outright, not merely throttle it, so the watchdog `setTimeout` does not
+   fire — but if the suspension covers the worker too, the runaway regex is
+   suspended along with it and nothing is actually hung. The pass condition is
+   therefore not "the watchdog fires on time" but "coming back to the
+   foreground resumes the scan and the watchdog still arrives". Check for the
+   asymmetric case specifically: the worker kept running while the timer did
+   not. Reports of backgrounded `WKWebView` continuing to execute JavaScript
+   from iOS 13.5.1 onward mean this is version-dependent, so it cannot be
+   settled by reading; it has to be run.
 4. Does `terminate()` stop a worker already inside a backtracking regex? Run
    something like `(a+)+$` against a long line of `a`s and check that the app
    stays responsive and the run ends in the notice rather than a spinner.
