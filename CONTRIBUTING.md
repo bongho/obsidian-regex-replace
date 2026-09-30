@@ -96,6 +96,26 @@ questions answered on the device itself:
 
 Answer 3 and 4 yes on a real device and the guard is one line to remove.
 
+Two of these have a desktop answer now, measured against an isolated instance
+running under `app.emulateMobile(true)`:
+
+- **The guard does what it claims.** With `app.isMobile` true,
+  `regex-replace:replace-in-vault` and `:undo-last-vault-replace` are absent
+  from `app.commands.commands` while the three editor commands stay registered.
+  That had never actually been run before.
+- **`terminate()` does stop a backtracking worker.** A blob worker fed `(a+)+$`
+  against 40 `a`s held one core at 100% for 57s and never replied; the
+  `terminate()` call returned in 0ms and the renderer settled to 0% and stayed
+  there. Driving the same pattern through the modal, the watchdog fired at
+  exactly 2000ms with "Matching stopped after 2000ms at ...", and the message
+  lands in the metrics line rather than as a `Notice`.
+
+Neither transfers to a mobile WebView on its own — same worker spec, different
+engine and different scheduler. What it does change is the shape of the
+remaining questions: 1, 2 and 4 now ask whether mobile *differs* from a
+known-good desktop path, not whether the path works at all. Question 3 is open
+on both, because nothing here backgrounded the app.
+
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required
 `tsconfig.json` `target` to move to `ES2018`, since TypeScript 5 checks regex
