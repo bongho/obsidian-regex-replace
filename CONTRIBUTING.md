@@ -130,16 +130,24 @@ It also splits the remaining risk by engine, which saying "mobile" was hiding.
 The asymmetry needs a platform that keeps worker threads scheduled while
 stopping the page's timers outright. That is not a hypothetical API.
 
-**Android is the side to worry about**, despite running the same Chromium this
-was measured on. It exposes `WebView.pauseTimers()`, whose documented job is
-to stop JavaScript timers for every WebView in the process, and nothing found
-so far — the Android reference, the Chromium scheduler thread that reintroduced
-paused timers for WebView, the Blink web-workers page — says whether that pause
-reaches worker task queues. Workers run in the renderer process on their own
-thread, so "pauses the page's timers" and "pauses the worker" are separate
-claims. A host that calls `pauseTimers()` from `onStop` would produce the
-asymmetry exactly: watchdog asleep, worker still burning. Whether Obsidian
-calls it is not observable from outside the app.
+**Android has the mechanism, but Obsidian does not appear to reach it.** The
+API to worry about is `WebView.pauseTimers()`. Chromium implements it as
+`RenderThreadImpl::SetWebKitSharedTimersSuspended`, whose entire body is
+`main_thread_scheduler_->PauseTimersForAndroidWebView()` — the main thread's
+scheduler, and workers run on their own. So the asymmetry is real and named:
+a host calling `pauseTimers()` from `onStop` puts the watchdog to sleep and
+leaves the worker burning.
+
+Obsidian's own APK says it does not. Reading the method tables and code of
+`Obsidian-1.13.8.apk`, the call chain is present but unreached:
+`WebView.pauseTimers` is invoked only from
+`MockCordovaWebViewImpl.setPaused`, which is invoked only from that class's
+own `handlePause`/`handleResume`, which nothing invokes. Capacitor's own
+lifecycle path agrees: `BridgeActivity.onPause`/`onStop` go to `Bridge`,
+which never mentions `pauseTimers`. Control for the method: `WebView.loadUrl`
+and `evaluateJavascript` come back with five callers each in the same pass,
+so a zero here is a real zero and not a broken parser. What this cannot see
+is a reflective call, which the Cordova bridge layer is fond of.
 
 **iOS looks like the safer side**, despite being the different engine. Reports
 have `WKWebView` continuing to execute JavaScript for roughly 30s after
@@ -148,11 +156,13 @@ so the watchdog runs normally in that window — and after it the WebContent
 process is suspended, or killed outright under memory pressure, which takes
 the worker with it either way.
 
-So the device run worth doing is narrow, and it is an Android one: start a
-scan with a runaway pattern, background the app for a minute, come back, and
-check both whether the watchdog message is waiting and whether the device got
-warm while it was away. The second half is the actual measurement — the
-message can arrive late and still mean the worker ran the whole time.
+That leaves the guard resting on a negative from static analysis plus a
+positive from a desktop engine, which is weaker than a device run and stronger
+than the nothing it had before. If someone does get a device: start a scan
+with a runaway pattern, background the app for a minute, come back, and check
+both whether the watchdog message is waiting and whether the phone got warm
+while it was away. The second half is the actual measurement — the message can
+arrive late and still mean the worker ran the whole time.
 
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required
