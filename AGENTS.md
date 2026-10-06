@@ -84,12 +84,14 @@ npm run build
 
 - Run `npm test` before finishing a change. It runs `test.ts`, a hand-rolled
   harness (no Vitest/Jest), and CI runs it too on Node 20/22/24.
-- Know its limit: `test.ts` **copies** the functions it tests out of `src/`
-  rather than importing them, so a green run proves the copy correct, not the
-  shipped code. `npm test` runs `check-test-copies.mjs` first to catch exactly
-  that: change a copied function in `src/` and the run fails until you update
-  the copy in `test.ts` to match. Run `npm run check:copies` on its own to see
-  which copies drifted. See `CONTRIBUTING.md` → Known gaps.
+- It imports from `src/`, so a green run means the shipped code is green. This
+  is recent: the suite used to copy the functions it tested, and two copies had
+  silently fallen behind. If you add a test for something in `src/`, import it
+  rather than pasting it.
+- The suite compiles under `tsconfig.test.json` (CommonJS), not the repo's own
+  `tsconfig.json` (ESNext, for the esbuild bundle). That is what makes the
+  imports resolve; `npm test` passes it with `--project`. See `CONTRIBUTING.md`
+  → Known gaps.
 - Manual install for testing: copy `main.js`, `manifest.json`, `styles.css` (if any) to:
   ```
   <Vault>/.obsidian/plugins/<plugin-id>/
