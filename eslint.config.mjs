@@ -18,7 +18,6 @@ export default defineConfig([
 						'eslint.config.mjs',
 						'esbuild.config.mjs',
 						'version-bump.mjs',
-						'check-test-copies.mjs',
 						'test.ts',
 					],
 				},
@@ -28,12 +27,7 @@ export default defineConfig([
 	{
 		// Build scripts and the standalone test harness are not shipped to
 		// users, so the mobile-safety and console rules do not apply to them.
-		files: [
-			'esbuild.config.mjs',
-			'version-bump.mjs',
-			'check-test-copies.mjs',
-			'test.ts',
-		],
+		files: ['esbuild.config.mjs', 'version-bump.mjs', 'test.ts'],
 		languageOptions: {
 			globals: { process: 'readonly' },
 		},

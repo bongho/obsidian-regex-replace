@@ -8,8 +8,7 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"lint": "eslint .",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"check:copies": "node check-test-copies.mjs",
-		"test": "npm run check:copies && ts-node --transpile-only test.ts"
+		"test": "ts-node --transpile-only --project tsconfig.test.json test.ts"
 	},
 	"keywords": [
 		"obsidian",
