@@ -37,26 +37,31 @@ its own `test()` and `assertEqual()`. It does now run: `npm test` is defined and
 CI's `test --if-present` step executes it, so the suite is no longer something
 only a human remembers to run.
 
-`test.ts` still **copies** the logic it tests out of `src/` instead of importing
-it — 17 functions as of 1.2.2. It has no imports at all, which is what lets
-`ts-node` run it under `"module": "ESNext"` without a loader; adding one would
-break `npm test`, so the copying stays.
+It imports what it tests, which is worth writing down because it did not until
+recently and the reason it didn't turned out to be wrong. `test.ts` used to
+**copy** 17 functions out of `src/`, on the understanding that it had to: it
+has no loader, and under the repo's `"module": "ESNext"` an `import` would not
+resolve. That part was true. The conclusion was not — `tsconfig.test.json`
+compiles the suite to CommonJS, and `npm test` passes it with `--project`, so
+the imports resolve and the copies are gone.
 
-What no longer stays is the silence around it. `npm test` now runs
-`check-test-copies.mjs` first, which parses both sides with the TypeScript AST
-and fails the run when a copy's body no longer matches its original. Copies are
-discovered rather than listed — any top-level function or class method in
-`test.ts` whose name also exists in `src/` or `main.ts` is compared — so adding
-one needs no change to the checker. Signatures are out of scope, since `test.ts`
-cannot name the types it would have to import; a renamed or reordered parameter
-that the body never reads is the one thing that still slips through.
+The second worry was that `src/vault-scan.ts` imports `obsidian`, which does
+not exist outside the app. It never mattered: `App` and `TFile` appear only in
+type positions there, so TypeScript elides the import and no `require` is
+emitted. Only a module that uses an `obsidian` export as a *value* would
+actually be unreachable from the suite, and none of the tested ones do.
 
-It was not a hypothetical gap. When the check was first run, `RegexEngine.preview`
-and `RegexEngine.execute` in `test.ts` were still the pre-`processReplacement`
-versions: the copy re-ran the regex on the matched substring, which is precisely
-the bug `collectMatches` was written to fix, and it never applied the `\n` / `\t`
-/ `\r` unescaping that the shipped code does. Both behaviours had no test at
-all. They have one each now.
+This is not cosmetic. While the copies existed, `RegexEngine.preview` and
+`.execute` in `test.ts` sat at their pre-`processReplacement` versions: the
+copy re-ran the regex on the matched substring — the exact bug `collectMatches`
+was written to fix — and never applied the `\n` / `\t` / `\r` unescaping that
+the shipped code does. A green suite said nothing about either. The check that
+caught it (`check-test-copies.mjs`, a body-level AST diff) has been deleted
+along with the copies it was guarding; there is no longer anything to drift.
+
+To confirm the wiring is real rather than coincidental, break something in
+`src/` and watch the suite fail. Changing one character of `processReplacement`
+drops it to 69 passed, 1 failed.
 
 **No `dependabot.yml`.** The lint toolchain was brought current on 2026-09-01
 (eslint 10, `typescript-eslint` 8, `typescript` 5.9 — the last of which required

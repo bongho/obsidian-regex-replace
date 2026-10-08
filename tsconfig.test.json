@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"module": "commonjs",
+		"target": "ES2018",
+		"moduleResolution": "node",
+		"esModuleInterop": true,
+		"strictNullChecks": true,
+		"noImplicitAny": true,
+		"lib": ["DOM", "ES2018"]
+	},
+	"include": ["test.ts", "src/**/*.ts"]
+}
