@@ -8,6 +8,8 @@ Safely clean up Markdown in [Obsidian](https://obsidian.md) with **live previews
 Preview every change before it touches your note. Run a one-off replacement or
 save a complete cleanup workflow for PDFs, AI-generated text, and Markdown.
 
+![Regex replace dialog showing a pattern, its match count, and a before/after preview with every match highlighted](docs/preview.png)
+
 ## Why Regex Replace?
 
 | Capability | Obsidian's built-in replace | Regex Replace |
@@ -209,6 +211,8 @@ you can cancel partway. When it finishes you get one row per file with a hit and
 its match count, all ticked. Untick the files you don't want; click a row to see
 that file's matches. **Apply** asks once more, naming how many files and roughly
 how long the write will take, and only replaces on the second click.
+
+![Replace in vault dialog after a scan, listing every matching file with its match count and a tickbox](docs/vault-replace.png)
 
 ### Undoing
 
