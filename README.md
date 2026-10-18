@@ -4,6 +4,7 @@ Safely clean up Markdown in [Obsidian](https://obsidian.md) with **live previews
 
 [![Obsidian plugin](https://img.shields.io/badge/Install_in-Obsidian-7c3aed?logo=obsidian)](https://obsidian.md/plugins?id=regex-replace)
 ![License](https://img.shields.io/badge/License-0BSD-green)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy_me_a-coffee-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/bongho)
 
 Preview every change before it touches your note. Run a one-off replacement or
 save a complete cleanup workflow for PDFs, AI-generated text, and Markdown.

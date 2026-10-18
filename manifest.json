@@ -6,5 +6,6 @@
 	"description": "Regex find and replace in one note or across your whole vault — preview matches, choose files, undo the run. Includes reusable multi-step pipelines.",
 	"author": "bongho",
 	"authorUrl": "https://github.com/bongho",
+	"fundingUrl": "https://buymeacoffee.com/bongho",
 	"isDesktopOnly": false
 }
