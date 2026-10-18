@@ -280,6 +280,11 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### 1.3.1
+- Add a Buy Me a Coffee link (`fundingUrl`), so the plugin page in Obsidian shows a way to support the plugin
+- Update dependencies to clear two high-severity `npm audit` advisories ([#22](https://github.com/bongho/obsidian-regex-replace/pull/22))
+- The test suite now imports `src/` instead of keeping copies of it ([#21](https://github.com/bongho/obsidian-regex-replace/pull/21))
+
 ### 1.3.0
 - **Vault-wide replace runs on mobile.** 1.2.2 held it back because the worker that stops a runaway pattern had never been exercised outside the desktop; it has now been traced far enough to lift the guard
 - The test suite tests the shipped code. `test.ts` copies the functions it exercises out of `src/`, and two of the copies had fallen years behind — `preview` and `execute` were still the versions from before replacement unescaping and before the fix for lookaround in the match list. `npm test` now fails when a copy drifts ([#19](https://github.com/bongho/obsidian-regex-replace/pull/19))
