@@ -29,6 +29,7 @@ external services.
 ## Features
 
 - **Regular Expression Support**: Full JavaScript regex syntax including capture groups (`$1`, `$2`, etc.)
+- **Case Operators**: `\u`, `\l`, `\U`, `\L` and `\E` in the replacement, as in sed and VS Code
 - **Real-time Preview**: See matches highlighted before replacing
 - **Match Highlighting**: Visual diff showing before/after changes
 - **Regex Flags**: Toggle global (`g`), case-insensitive (`i`), and multiline (`m`) flags
@@ -142,6 +143,29 @@ Replace: User: $1, Domain: $2
 Input:   test@example.com
 Output:  User: test, Domain: example
 ```
+
+### Changing case in the replacement
+
+The replacement understands the same case operators as sed, vim and VS Code.
+`\U` and `\L` recase everything that follows until `\E`; `\u` and `\l` touch
+only the next character.
+
+```
+Search:  (- )([a-z])
+Replace: $1\u$2
+Flags:   gm
+
+Input:   - element 1
+Output:  - Element 1
+```
+
+| Operator | Effect |
+|----------|--------|
+| `\u` | Uppercase the next character |
+| `\l` | Lowercase the next character |
+| `\U` | Uppercase everything until `\E` |
+| `\L` | Lowercase everything until `\E` |
+| `\E` | End the `\U` / `\L` span |
 
 ## Pipeline Rulesets
 

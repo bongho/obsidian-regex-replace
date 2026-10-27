@@ -34,6 +34,9 @@ export function computePreviewWindow(
 // before the first match. Exported so UI code shares one definition.
 export const PREVIEW_CONTEXT_BEFORE = CONTEXT_BEFORE;
 
+// How a case operator in a replacement template recases what follows.
+type CaseMode = 'none' | 'upper' | 'lower';
+
 export class RegexEngine {
 	static compile(pattern: string, flags: string): RegExp | null {
 		try {
@@ -43,11 +46,138 @@ export class RegexEngine {
 		}
 	}
 
-	private static processReplacement(replacement: string): string {
-		return replacement
-			.replace(/\\n/g, '\n')
-			.replace(/\\t/g, '\t')
-			.replace(/\\r/g, '\r');
+	// Case operators in the replacement, following the sed / vim / VS Code
+	// convention: \U and \L recase everything that follows until \E, while
+	// \u and \l affect only the next character.
+	private static readonly SPAN_OPS: Record<string, CaseMode> = {
+		U: 'upper',
+		L: 'lower',
+		E: 'none'
+	};
+
+	// Expands a replacement template against one match: the `$` group
+	// references, the \n / \t / \r escapes, and the case operators above.
+	// Done by hand rather than through String.replace's own `$` expansion
+	// because a case operator has to see where each group's text begins and
+	// ends, which the native expansion never exposes.
+	private static expandReplacement(
+		template: string,
+		m: readonly (string | undefined)[],
+		groups: Record<string, string> | undefined,
+		offset: number,
+		source: string
+	): string {
+		const matched = m[0] ?? '';
+		let out = '';
+		let span: CaseMode = 'none';
+		let pending: CaseMode = 'none';
+
+		const recase = (part: string): string =>
+			span === 'upper' ? part.toUpperCase() : span === 'lower' ? part.toLowerCase() : part;
+
+		// \u / \l bind to the next character that is actually emitted, so an
+		// empty group in between passes the pending operator along.
+		const emit = (part: string): void => {
+			if (!part) return;
+			if (pending !== 'none') {
+				const head = pending === 'upper' ? part[0].toUpperCase() : part[0].toLowerCase();
+				pending = 'none';
+				out += head + recase(part.slice(1));
+				return;
+			}
+			out += recase(part);
+		};
+
+		let i = 0;
+		while (i < template.length) {
+			const ch = template[i];
+
+			if (ch === '\\' && i + 1 < template.length) {
+				const next = template[i + 1];
+				if (next === 'U' || next === 'L' || next === 'E') {
+					span = this.SPAN_OPS[next];
+					pending = 'none';
+					i += 2;
+					continue;
+				}
+				if (next === 'u' || next === 'l') {
+					pending = next === 'u' ? 'upper' : 'lower';
+					i += 2;
+					continue;
+				}
+				if (next === 'n' || next === 't' || next === 'r') {
+					emit(next === 'n' ? '\n' : next === 't' ? '\t' : '\r');
+					i += 2;
+					continue;
+				}
+				// Any other escape is left exactly as written, which is what the
+				// earlier string-level processing did.
+				emit('\\');
+				i += 1;
+				continue;
+			}
+
+			if (ch === '$' && i + 1 < template.length) {
+				const next = template[i + 1];
+				if (next === '$') { emit('$'); i += 2; continue; }
+				if (next === '&') { emit(matched); i += 2; continue; }
+				if (next === '`') { emit(source.slice(0, offset)); i += 2; continue; }
+				if (next === "'") { emit(source.slice(offset + matched.length)); i += 2; continue; }
+				if (next === '<') {
+					const end = template.indexOf('>', i + 2);
+					if (end !== -1) {
+						emit(groups?.[template.slice(i + 2, end)] ?? '');
+						i = end + 1;
+						continue;
+					}
+				}
+				const digits = /^\d{1,2}/.exec(template.slice(i + 1));
+				if (digits) {
+					// Two digits win only when that group exists, which is how
+					// String.replace itself reads `$12` in a one-group pattern.
+					let ref = digits[0];
+					if (ref.length === 2 && parseInt(ref, 10) >= m.length) {
+						ref = ref[0];
+					}
+					emit(m[parseInt(ref, 10)] ?? '');
+					i += 1 + ref.length;
+					continue;
+				}
+			}
+
+			// Plain run up to the next operator, emitted in one piece so a
+			// pending \u applies to its first character and not to each one.
+			let j = i;
+			while (j < template.length && template[j] !== '\\' && template[j] !== '$') j++;
+			if (j === i) j = i + 1;
+			emit(template.slice(i, j));
+			i = j;
+		}
+
+		return out;
+	}
+
+	// Adapts String.replace's positional callback arguments to the shape
+	// expandReplacement wants. The named-groups object, when the pattern has
+	// one, always arrives last.
+	private static replacer(template: string): (substring: string, ...rest: unknown[]) => string {
+		return (substring: string, ...rest: unknown[]): string => {
+			const tail = [...rest];
+			const last = tail[tail.length - 1];
+			const groups =
+				last !== null && typeof last === 'object'
+					? (tail.pop() as Record<string, string>)
+					: undefined;
+			const source = tail.pop() as string;
+			const offset = tail.pop() as number;
+			return this.expandReplacement(
+				template,
+				[substring, ...(tail as (string | undefined)[])],
+				groups,
+				offset,
+				source
+			);
+		};
 	}
 
 	static preview(
@@ -62,9 +192,8 @@ export class RegexEngine {
 		}
 
 		try {
-			const processedReplacement = this.processReplacement(replacement);
-			const replaced = text.replace(regex, processedReplacement);
-			const matchInfos = this.collectMatches(text, pattern, processedReplacement, flags);
+			const replaced = text.replace(regex, this.replacer(replacement));
+			const matchInfos = this.collectMatches(text, pattern, replacement, flags);
 
 			return {
 				original: text,
@@ -96,7 +225,13 @@ export class RegexEngine {
 			// lookahead assertions match at wrong positions and produce a
 			// misleading preview (the actual replacement via text.replace() is
 			// unaffected and always correct).
-			const replacementText = this.substituteGroups(matchedText, match, replacement);
+			const replacementText = this.expandReplacement(
+				replacement,
+				match,
+				match.groups,
+				match.index,
+				text
+			);
 
 			matchInfos.push({
 				index: match.index,
@@ -113,28 +248,6 @@ export class RegexEngine {
 		return matchInfos;
 	}
 
-	private static substituteGroups(
-		matchedText: string,
-		match: RegExpExecArray,
-		replacement: string
-	): string {
-		// Split on $$ first so literal dollar signs are never re-processed,
-		// avoiding both a sentinel character and no-control-regex violations.
-		return replacement
-			.split('$$')
-			.map(part =>
-				part
-					.replace(/\$&/g, matchedText)
-					.replace(/\$(\d+)/g, (_full: string, n: string): string => {
-						const idx = parseInt(n, 10);
-						return match[idx] ?? '';
-					})
-					.replace(/\$<([^>]+)>/g, (_full: string, name: string): string =>
-						match.groups?.[name] ?? ''
-					)
-			)
-			.join('$');
-	}
 
 	static execute(
 		text: string,
@@ -148,8 +261,7 @@ export class RegexEngine {
 		}
 
 		try {
-			const processedReplacement = this.processReplacement(replacement);
-			return text.replace(regex, processedReplacement);
+			return text.replace(regex, this.replacer(replacement));
 		} catch (e) {
 			return { error: String(e) };
 		}

@@ -131,6 +131,70 @@ test('Multiple capture groups', () => {
 	assertEqual(result, 'Doe, John, Smith, Jane');
 });
 
+// --- Case Operator Tests ---
+console.log('\n--- Case Operators ---');
+
+test('\\U uppercases a group (issue #24)', () => {
+	const result = RegexEngine.execute('- element 1\n- element 2', '(- )([a-z])', '$1\\U$2', 'gm');
+	assertEqual(result, '- Element 1\n- Element 2');
+});
+
+test('\\U runs until \\E', () => {
+	const result = RegexEngine.execute('ab cd', '(\\w+) (\\w+)', '\\U$1\\E-$2', 'g');
+	assertEqual(result, 'AB-cd');
+});
+
+test('\\U with no \\E reaches the end of the template', () => {
+	assertEqual(RegexEngine.execute('abc', '(a)(b)', '\\U$1x$2', 'g'), 'AXBc');
+});
+
+test('\\L lowercases what follows', () => {
+	assertEqual(RegexEngine.execute('HELLO', '(\\w+)', '\\L$1', 'g'), 'hello');
+});
+
+test('\\u touches only the next character', () => {
+	assertEqual(RegexEngine.execute('john doe', '(\\w+) (\\w+)', '\\u$1 \\u$2', 'g'), 'John Doe');
+});
+
+test('\\l touches only the next character', () => {
+	assertEqual(RegexEngine.execute('HELLO', '(\\w+)', '\\l$1', 'g'), 'hELLO');
+});
+
+test('\\u carries past an empty group', () => {
+	assertEqual(RegexEngine.execute('ab', '(x?)(ab)', '\\u$1$2', 'g'), 'Ab');
+});
+
+test('Case operators reset between matches', () => {
+	assertEqual(RegexEngine.execute('a b', '(\\w)', '\\u$1', 'g'), 'A B');
+});
+
+test('Preview shows the cased replacement too', () => {
+	const result = RegexEngine.preview('- a', '(- )([a-z])', '$1\\U$2', 'gm');
+	if ('error' in result) throw new Error(result.error);
+	assertEqual(result.matches[0].replacement, '- A');
+	assertEqual(result.replaced, '- A');
+});
+
+test('$$ and $& survive the hand-rolled expansion', () => {
+	assertEqual(RegexEngine.execute('ab', 'b', '$$$&', 'g'), 'a$b');
+});
+
+test('Named groups still expand', () => {
+	assertEqual(RegexEngine.execute('ab', '(?<first>a)(?<second>b)', '$<second>$<first>', 'g'), 'ba');
+});
+
+test('A two-digit reference falls back when that group is absent', () => {
+	assertEqual(RegexEngine.execute('ab', '(a)', '$12', 'g'), 'a2b');
+});
+
+test('An unknown escape stays as written', () => {
+	assertEqual(RegexEngine.execute('a', 'a', '\\d', 'g'), '\\d');
+});
+
+test('\\n still becomes a newline', () => {
+	assertEqual(RegexEngine.execute('a,b', ',', '\\n', 'g'), 'a\nb');
+});
+
 // --- Preview Function Tests ---
 console.log('\n--- Preview Function ---');
 
