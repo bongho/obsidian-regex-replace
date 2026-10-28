@@ -308,6 +308,10 @@ npx ts-node --transpile-only test.ts
 
 ## Changelog
 
+### 1.4.0
+- **Case operators in the replacement.** `\u`, `\l`, `\U`, `\L` and `\E` work the way they do in sed, vim and VS Code, so a pattern can change the case of what it captured instead of only moving it around ([#24](https://github.com/bongho/obsidian-regex-replace/issues/24))
+- `` $` `` and `$'` now resolve in the preview. The preview dropped them silently, so it could disagree with what applying the replacement actually produced
+
 ### 1.3.1
 - Add a Buy Me a Coffee link (`fundingUrl`), so the plugin page in Obsidian shows a way to support the plugin
 - Update dependencies to clear two high-severity `npm audit` advisories ([#22](https://github.com/bongho/obsidian-regex-replace/pull/22))
